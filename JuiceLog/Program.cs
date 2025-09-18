@@ -1,4 +1,8 @@
-﻿using JuiceLog.BackgroundServices;
+﻿using System;
+using System.Threading.Tasks;
+using JuiceLog.BackgroundServices;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Quartz;
 
 namespace JuiceLog;
