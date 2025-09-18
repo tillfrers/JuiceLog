@@ -8,6 +8,7 @@
     ".NETCoreApp,Version=v9.0": {
       "JuiceLog/1.0.0": {
         "dependencies": {
+          "FFMpegCore": "5.2.0",
           "Microsoft.Extensions.Configuration": "9.0.6",
           "Microsoft.Extensions.Configuration.Binder": "9.0.6",
           "Microsoft.Extensions.Hosting": "9.0.2",
@@ -18,6 +19,26 @@
         },
         "runtime": {
           "JuiceLog.dll": {}
+        }
+      },
+      "FFMpegCore/5.2.0": {
+        "dependencies": {
+          "Instances": "3.0.1",
+          "System.Text.Json": "9.0.2"
+        },
+        "runtime": {
+          "lib/netstandard2.0/FFMpegCore.dll": {
+            "assemblyVersion": "5.0.0.0",
+            "fileVersion": "5.0.0.0"
+          }
+        }
+      },
+      "Instances/3.0.1": {
+        "runtime": {
+          "lib/netstandard2.0/Instances.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       },
       "Microsoft.EntityFrameworkCore/9.0.1": {
@@ -523,7 +544,8 @@
             "fileVersion": "9.0.225.6610"
           }
         }
-      }
+      },
+      "System.Text.Json/9.0.2": {}
     }
   },
   "libraries": {
@@ -531,6 +553,20 @@
       "type": "project",
       "serviceable": false,
       "sha512": ""
+    },
+    "FFMpegCore/5.2.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-VpTM8mNo41Upj2zrlroEroQp7TGaXa+jDlGbekvy7Vcvz7bQTesUhf0LWvvwgakcCo9j9OlhP1bzkaZpEyn8WA==",
+      "path": "ffmpegcore/5.2.0",
+      "hashPath": "ffmpegcore.5.2.0.nupkg.sha512"
+    },
+    "Instances/3.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-HSMGZF4g/VcmVyoWH2fRkgZMAW50FcsKvDttwH1jVS2oIz7V9xw9e/b2KhbCO4RSJKJEgTuPKQb6sQvqcDOl2A==",
+      "path": "instances/3.0.1",
+      "hashPath": "instances.3.0.1.nupkg.sha512"
     },
     "Microsoft.EntityFrameworkCore/9.0.1": {
       "type": "package",
@@ -804,6 +840,13 @@
       "sha512": "sha512-i+Fe6Fpst/onydFLBGilCr/Eh9OFdlaTU/c3alPp6IbLZXQJOgpIu3l4MOnmsN8fDYq5nAyHSqNIJesc74Yw3Q==",
       "path": "system.diagnostics.eventlog/9.0.2",
       "hashPath": "system.diagnostics.eventlog.9.0.2.nupkg.sha512"
+    },
+    "System.Text.Json/9.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-4TY2Yokh5Xp8XHFhsY9y84yokS7B0rhkaZCXuRiKppIiKwPVH4lVSFD9EEFzRpXdBM5ZeZXD43tc2vB6njEwwQ==",
+      "path": "system.text.json/9.0.2",
+      "hashPath": "system.text.json.9.0.2.nupkg.sha512"
     }
   }
 }

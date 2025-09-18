@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("JuiceLog")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a10db29e53e01581b7c6b7c6b23d58fc84178597")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3bba5784a3302171c49e34101101c6f1476d933e")]
 [assembly: System.Reflection.AssemblyProductAttribute("JuiceLog")]
 [assembly: System.Reflection.AssemblyTitleAttribute("JuiceLog")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

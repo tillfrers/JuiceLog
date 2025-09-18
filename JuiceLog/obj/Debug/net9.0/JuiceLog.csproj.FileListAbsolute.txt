@@ -56,3 +56,5 @@ C:\Users\tillf\RiderProjects\JuiceLog\JuiceLog\obj\Debug\net9.0\refint\JuiceLog.
 C:\Users\tillf\RiderProjects\JuiceLog\JuiceLog\obj\Debug\net9.0\JuiceLog.pdb
 C:\Users\tillf\RiderProjects\JuiceLog\JuiceLog\obj\Debug\net9.0\JuiceLog.genruntimeconfig.cache
 C:\Users\tillf\RiderProjects\JuiceLog\JuiceLog\obj\Debug\net9.0\ref\JuiceLog.dll
+C:\Users\tillf\RiderProjects\JuiceLog\JuiceLog\bin\Debug\net9.0\FFMpegCore.dll
+C:\Users\tillf\RiderProjects\JuiceLog\JuiceLog\bin\Debug\net9.0\Instances.dll
