@@ -1,6 +1,7 @@
 ﻿namespace JuiceLog.Common.Enums;
 
-public class CameraType
+public enum CameraType
 {
-    
+    Gas = 0,
+    Electric = 1,
 }

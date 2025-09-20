@@ -22,7 +22,7 @@ public class Program
         })
         .ConfigureServices((hostContext, services) =>
         {
-            //services.AddServices(hostContext.Configuration);
+            services.AddServices(hostContext.Configuration);
 
             services.AddQuartz(q =>
             {

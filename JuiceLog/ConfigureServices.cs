@@ -1,4 +1,6 @@
 ﻿using JuiceLog.BackgroundServices;
+using JuiceLog.Common;
+using JuiceLog.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,7 +23,10 @@ public static class ConfigureServices
 
         services.AddScoped<IMeldedateiRepository, MeldedateiRepository>();
 */
+        
         services.AddScoped<CollectorJob>();
+        
+        services.Configure<AppConfiguration>(configuration);
 
         return services;
     }

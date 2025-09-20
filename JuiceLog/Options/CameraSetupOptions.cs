@@ -8,4 +8,6 @@ public class CameraSetupOptions
     public string Url { get; set; }
     public string User { get; set; }
     public string Password { get; set; }
+    
+    public Uri BuildUri => new Uri($"rtsp://{User}:{Password}@{Url}");
 }
