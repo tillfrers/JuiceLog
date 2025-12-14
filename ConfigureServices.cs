@@ -1,8 +1,9 @@
-﻿using JuiceLog.BackgroundServices;
+﻿using JuiceLog.Abstractions;
+using JuiceLog.BackgroundServices;
 using JuiceLog.Common;
-using JuiceLog.Options;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+using JuiceLog.Persistence;
+using JuiceLog.Repositiories;
+using Microsoft.EntityFrameworkCore;
 
 namespace JuiceLog;
 
@@ -10,23 +11,16 @@ public static class ConfigureServices
 {
     public static IServiceCollection AddServices(this IServiceCollection services, IConfiguration configuration)
     {
-        /*services.AddDbContext<A1DbContext>((serviceProvider, options) =>
-        {
-            var secretConnectionStringService = serviceProvider.GetRequiredService<ISecretConnectionStringService>();
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-            options.UseNpgsql(
-                secretConnectionStringService.GetConnectionString(),
-                o => o.MigrationsHistoryTable(
-                    tableName: HistoryRepository.DefaultTableName,
-                    schema: A1DbContext.Schema));
-        });
-
-        services.AddScoped<IMeldedateiRepository, MeldedateiRepository>();
-*/
+        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
         
         services.AddScoped<CollectorJob>();
         
         services.Configure<AppConfiguration>(configuration);
+        
+        services.AddSingleton<ITimeProvider, SystemTimeProvider>();
+        services.AddSingleton<IEnergyRepository, EnergyRepository>();
 
         return services;
     }

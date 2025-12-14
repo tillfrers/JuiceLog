@@ -4,5 +4,5 @@ namespace JuiceLog.Common;
 
 public class AppConfiguration
 {
-    public List<CameraSetupOptions> CameraSetups { get; set; } = [];
+    public List<LoggerConfigurationOptions> LoggerConfiguration { get; set; } = [];
 }

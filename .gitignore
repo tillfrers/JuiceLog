@@ -1,2 +1,5 @@
 ﻿/bin
 /obj
+appsettings.Production.json
+appsettings.production.json
+/.idea

@@ -1,8 +1,6 @@
-﻿using System;
-using System.Threading.Tasks;
-using JuiceLog.BackgroundServices;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
+﻿using JuiceLog.BackgroundServices;
+using JuiceLog.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Quartz;
 
 namespace JuiceLog;
@@ -12,13 +10,28 @@ public class Program
     public static async Task Main(string[] args)
     {
         var host = CreateHostBuilder(args).Build();
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Database.MigrateAsync();
+        }
+        
         await host.RunAsync();
     }
 
     private static IHostBuilder CreateHostBuilder(string[] args) => Host.CreateDefaultBuilder(args)
         .ConfigureAppConfiguration((_, config) =>
         {
-            config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+            var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+                              ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+                              ?? "Production";
+
+            config
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables();
         })
         .ConfigureServices((hostContext, services) =>
         {
@@ -36,7 +49,7 @@ public class Program
                     .WithIdentity("CollectorJob-Trigger")
                     .StartAt(DateTime.UtcNow.Add(TimeSpan.FromSeconds(1)))
                     .WithSimpleSchedule(schedule => schedule
-                        .WithIntervalInSeconds(interval)
+                        .WithIntervalInMinutes(interval)
                         .RepeatForever()));
             });
 
