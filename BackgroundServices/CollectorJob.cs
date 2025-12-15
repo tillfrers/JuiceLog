@@ -68,7 +68,7 @@ public class CollectorJob(
             await energyRepository.WriteEnergyValueToDbAsync(
                 LoggerType.SmartMeter, 
                 EnergyType.Electricity, 
-                Convert.ToDouble(data.entry[0].val.TrimEnd('0'))
+                Convert.ToDouble(data.entry[0].val[..^3])
                 );
             
             Console.WriteLine($"Energy data written to DB {timeProvider.GetBerlinNow}");
