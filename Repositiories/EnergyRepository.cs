@@ -2,6 +2,7 @@
 using JuiceLog.Common.Enums;
 using JuiceLog.Entities;
 using JuiceLog.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace JuiceLog.Repositiories;
 
@@ -22,5 +23,14 @@ public class EnergyRepository(AppDbContext dbContext, ITimeProvider timeProvider
         dbContext.SaveChanges();
         
         return Task.CompletedTask;
+    }
+
+    public Task<Energy?> GetLastEnergyValueAsync(LoggerType loggerType, EnergyType energyType)
+    {
+        return dbContext.Energy
+            .AsNoTracking()
+            .Where(e => e.LoggerType == loggerType && e.EnergyType == energyType)
+            .OrderByDescending(e => e.Date)
+            .FirstOrDefaultAsync();
     }
 }

@@ -11,9 +11,12 @@ using Quartz;
 namespace JuiceLog.BackgroundServices;
 
 public class CollectorJob(
-    IOptions<AppConfiguration> configuration,
+    IOptionsSnapshot<AppConfiguration> configuration,
     IEnergyRepository energyRepository,
-    ITimeProvider timeProvider) : IJob
+    ITimeProvider timeProvider,
+    ISnapshotService snapshotService,
+    IMeterImageReader meterImageReader,
+    IMeterReadingValidator meterReadingValidator) : IJob
 {
     public static readonly JobKey JobKey = new("Collector", "BackgroundJob");
 
@@ -25,9 +28,23 @@ public class CollectorJob(
 
         foreach (var loggerConfiguration in loggerConfigurations)
         {
-            if (loggerConfiguration.LoggerType == LoggerType.SmartMeter)
+            try
             {
-                await ProcessSmartMeterAsync(loggerConfiguration);
+                switch (loggerConfiguration.LoggerType)
+                {
+                    case LoggerType.SmartMeter :
+                        await ProcessSmartMeterAsync(loggerConfiguration);
+                        break;
+                    case LoggerType.Camera :
+                        await ProcessCameraAsync(loggerConfiguration, context.CancellationToken);
+                        break;
+                    default: throw new ArgumentOutOfRangeException();
+                }
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                // one failing logger must not prevent the others from being collected
+                Console.WriteLine($"{loggerConfiguration.LoggerType} logger failed: {e.Message} {timeProvider.GetBerlinNow}");
             }
         }
     }
@@ -78,45 +95,49 @@ public class CollectorJob(
             Console.WriteLine($"Http failed. Code: {response.StatusCode} {timeProvider.GetBerlinNow}");
         }
     }
-    
-    //ToDo: Logic snippets for camera implementation
-    /*
-     /*var cameras = configuration.Value.CameraSetups;
 
-        foreach (var camera in cameras)
+    private async Task ProcessCameraAsync(LoggerConfigurationOptions logger, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(logger.Url)) throw new Exception("Camera url is null");
+        if (string.IsNullOrEmpty(logger.User)) throw new Exception("Camera user is null");
+        if (string.IsNullOrEmpty(logger.Password)) throw new Exception("Camera password is null");
+
+        if (logger.Camera.DigitRois.Count == 0)
         {
-            if (camera.Url is null) throw new Exception("Camera url is null");
-            if (camera.User is null) throw new Exception("Camera user is null");
-            if (camera.Password is null) throw new Exception("Camera password is null");
+            Console.WriteLine($"Camera: no digit positions configured - open http://<host>:{configuration.Value.Calibration.Port}/ to draw them {timeProvider.GetBerlinNow}");
+            return;
+        }
 
-            await GetSnapshot(camera.BuildUri);
-        }* /
-        
-        
-        /* "CameraSetups": [
-    {
-      "CameraType": 0,
-      "Url": "192.168.178.135:554/stream1",
-      "User": "JuiceLogGas",
-      "Password": "12345678"
+        var jpeg = await snapshotService.CaptureJpegAsync(logger.BuildRtspUri, cancellationToken);
+
+        var reading = meterImageReader.Read(jpeg, logger.Camera);
+        Console.WriteLine($"Camera: raw [{reading.RawReadingsText}] confidence [{reading.ConfidencesText}] -> {reading.DigitsText} {timeProvider.GetBerlinNow}");
+
+        if (reading.Value is not { } value)
+        {
+            Console.WriteLine($"Camera: snapshot skipped: {reading.Problem} {timeProvider.GetBerlinNow}");
+            return;
+        }
+
+        var last = await energyRepository.GetLastEnergyValueAsync(LoggerType.Camera, logger.EnergyType);
+        // the least significant drum may jitter by one unit while the meter stands still
+        var tolerance = 1.5 * Math.Pow(10, -logger.Camera.DecimalDigits);
+        var verdict = meterReadingValidator.Validate(logger.EnergyType, value, last, timeProvider.GetBerlinNow,
+            logger.Camera.MaxIncreasePerHour, tolerance, out var reason);
+
+        if (verdict != ReadingVerdict.Accept)
+        {
+            Console.WriteLine($"Camera: reading {value} {(verdict == ReadingVerdict.Reject ? "rejected" : "skipped")}: {reason} {timeProvider.GetBerlinNow}");
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(reason))
+        {
+            Console.WriteLine($"Camera: {reason} {timeProvider.GetBerlinNow}");
+        }
+
+        await energyRepository.WriteEnergyValueToDbAsync(LoggerType.Camera, logger.EnergyType, value);
+
+        Console.WriteLine($"Energy data written to DB {timeProvider.GetBerlinNow}");
     }
-  ]* /
-        
-        
-     private Task GetSnapshot(Uri uri)
-    {
-        string outputFileName = "C:\\Users\\tillf\\Downloads\\" + DateTime.UtcNow.ToString("yyy-MM-dd-hh-mm-ss") + ".jpeg";
-
-        GlobalFFOptions.Configure(new FFOptions { BinaryFolder = @"C:\Users\tillf\Downloads" });
-        FFMpegArguments
-            .FromUrlInput(uri)
-            .OutputToFile(outputFileName, false, options => options
-                .WithFrameOutputCount(1)
-                )
-            .ProcessSynchronously();
-
-        Console.WriteLine($"Snapshot captured and saved to: {outputFileName}");
-        
-        return Task.CompletedTask;
-    }*/
 }

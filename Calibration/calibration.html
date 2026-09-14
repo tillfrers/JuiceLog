@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JuiceLog – Zähler kalibrieren</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #f3f4f6; color: #111; display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 14px; background: #fff; border-bottom: 1px solid #ddd; }
+  header h1 { font-size: 16px; margin: 0 12px 0 0; }
+  header label { display: inline-flex; align-items: center; gap: 6px; }
+  button { padding: 6px 12px; border: 1px solid #999; border-radius: 4px; background: #fff; cursor: pointer; }
+  button:hover { background: #eee; }
+  button.primary { background: #2563eb; border-color: #1d4ed8; color: #fff; }
+  button.primary:hover { background: #1d4ed8; }
+  button:disabled { opacity: .5; cursor: default; }
+  input[type=number] { width: 5em; padding: 4px; }
+  select { padding: 4px; }
+  #status { margin-left: auto; color: #444; }
+  #status.error { color: #b91c1c; font-weight: 600; }
+  #status.ok { color: #15803d; font-weight: 600; }
+  main { display: flex; flex: 1; min-height: 0; }
+  #stage { flex: 1; overflow: auto; background: #222; position: relative; }
+  #stage canvas { display: block; cursor: crosshair; }
+  aside { width: 360px; overflow: auto; background: #fff; border-left: 1px solid #ddd; padding: 12px; }
+  aside h2 { font-size: 14px; margin: 14px 0 6px; }
+  aside p.hint { color: #555; margin: 0 0 8px; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { padding: 3px 4px; text-align: left; font-size: 13px; }
+  tr.selected td { background: #fef3c7; }
+  td input { width: 4.2em; padding: 2px; }
+  td button { padding: 1px 6px; }
+  #results img { image-rendering: pixelated; width: 40px; height: 64px; border: 1px solid #999; vertical-align: middle; }
+  .bad { color: #b91c1c; }
+  textarea { width: 100%; height: 130px; font: 11px/1.3 monospace; }
+  kbd { background: #eee; border: 1px solid #ccc; border-radius: 3px; padding: 0 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>JuiceLog – Ziffern markieren</h1>
+  <button id="btnSnapshot">Neuer Snapshot</button>
+  <label>Zoom
+    <select id="zoom">
+      <option value="0.5">50 %</option>
+      <option value="0.75">75 %</option>
+      <option value="1" selected>100 %</option>
+      <option value="1.5">150 %</option>
+      <option value="2">200 %</option>
+    </select>
+  </label>
+  <label>Nachkommastellen <input type="number" id="decimals" min="0" max="8" value="3"></label>
+  <button id="btnRefine" title="Position und Größe jedes Kästchens automatisch nachjustieren">Kästchen optimieren</button>
+  <button id="btnTest">Testen</button>
+  <button id="btnSave" class="primary">Speichern</button>
+  <span id="status">Lade Snapshot …</span>
+</header>
+<main>
+  <div id="stage"><canvas id="canvas"></canvas></div>
+  <aside>
+    <p class="hint">Ziehe mit der Maus ein Kästchen um <b>jede Ziffernrolle</b>, von links nach rechts. Die Ziffer soll
+      mittig sitzen, mit etwas Rand (Seitenverhältnis ungefähr 2:3). Grob reicht: <b>Kästchen optimieren</b> justiert Position und Größe danach automatisch nach. Kästchen anklicken
+      zum Auswählen, ziehen zum Verschieben, an der rechten unteren Ecke ziehen zur Größenänderung. <kbd>Pfeile</kbd> verschieben um 1 px
+      (<kbd>Shift</kbd> 5 px), <kbd>Entf</kbd> löscht.</p>
+    <h2>Kästchen (<span id="count">0</span>)</h2>
+    <table id="boxes"><thead><tr><th>#</th><th>X</th><th>Y</th><th>B</th><th>H</th><th></th></tr></thead><tbody></tbody></table>
+    <h2>Testergebnis</h2>
+    <div id="results"><p class="hint">Noch nicht getestet.</p></div>
+    <h2>Konfiguration (JSON)</h2>
+    <p class="hint">Wird beim Speichern in die appsettings-Datei des laufenden Programms geschrieben. Für das Projekt
+      kannst du den Block hier kopieren.</p>
+    <textarea id="json" readonly></textarea>
+  </aside>
+</main>
+<script>
+(() => {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const stage = document.getElementById('stage');
+  const statusEl = document.getElementById('status');
+  const tbody = document.querySelector('#boxes tbody');
+  const decimalsInput = document.getElementById('decimals');
+
+  const state = {
+    img: null,
+    boxes: [],      // {x, y, w, h} in image pixels
+    selected: -1,
+    zoom: 1,
+    drag: null,     // {mode: 'draw'|'move'|'resize', startX, startY, box}
+  };
+
+  const setStatus = (text, kind = '') => { statusEl.textContent = text; statusEl.className = kind; };
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  // ---------------------------------------------------------------- rendering
+  function sortBoxes() {
+    const selectedBox = state.boxes[state.selected];
+    state.boxes.sort((a, b) => a.x - b.x);
+    state.selected = selectedBox ? state.boxes.indexOf(selectedBox) : -1;
+  }
+
+  function render() {
+    if (!state.img) return;
+    const z = state.zoom;
+    canvas.width = Math.round(state.img.naturalWidth * z);
+    canvas.height = Math.round(state.img.naturalHeight * z);
+    ctx.drawImage(state.img, 0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 2;
+    ctx.font = 'bold 14px sans-serif';
+    state.boxes.forEach((b, i) => {
+      const selected = i === state.selected;
+      ctx.strokeStyle = selected ? '#facc15' : '#ef4444';
+      ctx.strokeRect(b.x * z, b.y * z, b.w * z, b.h * z);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.fillRect(b.x * z, b.y * z - 18, 22, 18);
+      ctx.fillStyle = '#000';
+      ctx.fillText(String(i + 1), b.x * z + 5, b.y * z - 4);
+      if (selected) {
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect((b.x + b.w) * z - 5, (b.y + b.h) * z - 5, 10, 10);
+      }
+    });
+    if (state.drag && state.drag.mode === 'draw' && state.drag.box) {
+      const b = state.drag.box;
+      ctx.strokeStyle = '#22c55e';
+      ctx.strokeRect(b.x * z, b.y * z, b.w * z, b.h * z);
+    }
+    renderTable();
+    renderJson();
+  }
+
+  function renderTable() {
+    document.getElementById('count').textContent = state.boxes.length;
+    tbody.innerHTML = '';
+    state.boxes.forEach((b, i) => {
+      const tr = document.createElement('tr');
+      if (i === state.selected) tr.className = 'selected';
+      tr.innerHTML = `<td>${i + 1}</td>` +
+        ['x', 'y', 'w', 'h'].map(k => `<td><input type="number" data-i="${i}" data-k="${k}" value="${b[k]}"></td>`).join('') +
+        `<td><button data-del="${i}" title="Löschen">✕</button></td>`;
+      tr.addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') { state.selected = i; render(); } });
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('input').forEach(input => input.addEventListener('change', e => {
+      const b = state.boxes[+e.target.dataset.i];
+      b[e.target.dataset.k] = Math.round(+e.target.value) || 0;
+      normalize(b);
+      sortBoxes();
+      render();
+    }));
+    tbody.querySelectorAll('button[data-del]').forEach(btn => btn.addEventListener('click', e => {
+      state.boxes.splice(+e.target.dataset.del, 1);
+      state.selected = -1;
+      render();
+    }));
+  }
+
+  function renderJson() {
+    const json = {
+      DecimalDigits: +decimalsInput.value,
+      DigitRois: state.boxes.map(b => ({ X: b.x, Y: b.y, Width: b.w, Height: b.h })),
+    };
+    document.getElementById('json').value = JSON.stringify(json, null, 2);
+  }
+
+  function normalize(b) {
+    if (!state.img) return;
+    b.w = Math.max(4, b.w); b.h = Math.max(4, b.h);
+    b.x = clamp(b.x, 0, state.img.naturalWidth - b.w);
+    b.y = clamp(b.y, 0, state.img.naturalHeight - b.h);
+  }
+
+  // ---------------------------------------------------------------- mouse
+  const toImage = e => {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / state.zoom, y: (e.clientY - r.top) / state.zoom };
+  };
+  const hit = p => state.boxes.findIndex(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+  const hitResizeHandle = (p, b) => b && Math.abs(p.x - (b.x + b.w)) * state.zoom <= 8 && Math.abs(p.y - (b.y + b.h)) * state.zoom <= 8;
+
+  canvas.addEventListener('mousedown', e => {
+    if (!state.img || e.button !== 0) return;
+    const p = toImage(e);
+    const selectedBox = state.boxes[state.selected];
+    if (hitResizeHandle(p, selectedBox)) {
+      state.drag = { mode: 'resize', box: selectedBox, startX: p.x, startY: p.y, orig: { ...selectedBox } };
+      return;
+    }
+    const i = hit(p);
+    if (i >= 0) {
+      state.selected = i;
+      state.drag = { mode: 'move', box: state.boxes[i], startX: p.x, startY: p.y, orig: { ...state.boxes[i] } };
+    } else {
+      state.selected = -1;
+      state.drag = { mode: 'draw', startX: p.x, startY: p.y, box: null };
+    }
+    render();
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', e => {
+    const d = state.drag;
+    if (!d) return;
+    const p = toImage(e);
+    if (d.mode === 'draw') {
+      d.box = {
+        x: Math.round(Math.min(d.startX, p.x)), y: Math.round(Math.min(d.startY, p.y)),
+        w: Math.round(Math.abs(p.x - d.startX)), h: Math.round(Math.abs(p.y - d.startY)),
+      };
+    } else if (d.mode === 'move') {
+      d.box.x = Math.round(d.orig.x + p.x - d.startX);
+      d.box.y = Math.round(d.orig.y + p.y - d.startY);
+      normalize(d.box);
+    } else {
+      d.box.w = Math.round(d.orig.w + p.x - d.startX);
+      d.box.h = Math.round(d.orig.h + p.y - d.startY);
+      normalize(d.box);
+    }
+    render();
+  });
+
+  window.addEventListener('mouseup', () => {
+    const d = state.drag;
+    if (!d) return;
+    state.drag = null;
+    if (d.mode === 'draw') {
+      if (d.box && d.box.w >= 4 && d.box.h >= 4) {
+        normalize(d.box);
+        state.boxes.push(d.box);
+        state.selected = state.boxes.indexOf(d.box);
+      }
+    }
+    sortBoxes();
+    render();
+  });
+
+  // ---------------------------------------------------------------- keyboard
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const b = state.boxes[state.selected];
+    if (!b) return;
+    const step = e.shiftKey ? 5 : 1;
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (moves[e.key]) {
+      b.x += moves[e.key][0]; b.y += moves[e.key][1];
+      normalize(b); sortBoxes(); render(); e.preventDefault();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      state.boxes.splice(state.selected, 1); state.selected = -1; render(); e.preventDefault();
+    } else if (e.key === 'Escape') {
+      state.selected = -1; render();
+    }
+  });
+
+  // ---------------------------------------------------------------- server
+  async function loadSnapshot(fresh) {
+    setStatus('Hole Snapshot von der Kamera …');
+    document.getElementById('btnSnapshot').disabled = true;
+    try {
+      const res = await fetch('/api/snapshot' + (fresh ? '?fresh=1&t=' + Date.now() : ''));
+      if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+      const blob = await res.blob();
+      const img = new Image();
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = URL.createObjectURL(blob); });
+      state.img = img;
+      setStatus(`Snapshot ${img.naturalWidth}×${img.naturalHeight} px`, 'ok');
+      render();
+    } catch (err) {
+      setStatus('Snapshot fehlgeschlagen: ' + err.message, 'error');
+    } finally {
+      document.getElementById('btnSnapshot').disabled = false;
+    }
+  }
+
+  const payload = () => ({ digitRois: state.boxes.map(b => ({ x: b.x, y: b.y, width: b.w, height: b.h })), decimalDigits: +decimalsInput.value });
+
+  async function post(url) {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    return data;
+  }
+
+  async function test() {
+    if (!state.boxes.length) { setStatus('Erst Kästchen zeichnen.', 'error'); return; }
+    setStatus('Teste Erkennung …');
+    try {
+      const data = await post('/api/test');
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>#</th><th>Crop</th><th>Rohwert</th><th>Konfidenz</th></tr></thead>';
+      const body = document.createElement('tbody');
+      data.readings.forEach((r, i) => {
+        const tr = document.createElement('tr');
+        const low = r.confidence < 0.6;
+        tr.innerHTML = `<td>${i + 1}</td><td><img src="${r.crop}" alt=""></td><td>${r.value.toFixed(1)}</td><td class="${low ? 'bad' : ''}">${r.confidence.toFixed(2)}</td>`;
+        body.appendChild(tr);
+      });
+      table.appendChild(body);
+      results.appendChild(table);
+      const summary = document.createElement('p');
+      summary.innerHTML = data.value != null
+        ? `Ziffern <b>${data.digits}</b> → Zählerstand <b>${data.value}</b>`
+        : `<span class="bad">Kein Wert: ${data.problem}</span>`;
+      results.appendChild(summary);
+      setStatus(data.value != null ? `Erkannt: ${data.value}` : 'Erkennung unsicher – siehe Testergebnis', data.value != null ? 'ok' : 'error');
+    } catch (err) {
+      setStatus('Test fehlgeschlagen: ' + err.message, 'error');
+    }
+  }
+
+  async function refine() {
+    if (!state.boxes.length) { setStatus('Erst Kästchen zeichnen.', 'error'); return; }
+    setStatus('Optimiere Kästchen …');
+    document.getElementById('btnRefine').disabled = true;
+    try {
+      const data = await post('/api/refine');
+      state.boxes = data.digitRois.map(r => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
+      state.selected = -1;
+      sortBoxes();
+      render();
+      await test();
+    } catch (err) {
+      setStatus('Optimieren fehlgeschlagen: ' + err.message, 'error');
+    } finally {
+      document.getElementById('btnRefine').disabled = false;
+    }
+  }
+
+  async function save() {
+    if (!state.boxes.length) { setStatus('Erst Kästchen zeichnen.', 'error'); return; }
+    if (+decimalsInput.value > state.boxes.length) { setStatus('Mehr Nachkommastellen als Kästchen.', 'error'); return; }
+    setStatus('Speichere …');
+    try {
+      const data = await post('/api/rois');
+      setStatus(`${data.count} Kästchen gespeichert in: ${data.files.join(" und ")}. Ab dem nächsten Durchlauf aktiv.`, "ok");
+    } catch (err) {
+      setStatus('Speichern fehlgeschlagen: ' + err.message, 'error');
+    }
+  }
+
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/config');
+      if (!res.ok) return;
+      const cfg = await res.json();
+      decimalsInput.value = cfg.decimalDigits;
+      state.boxes = (cfg.digitRois || []).map(r => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
+      sortBoxes();
+    } catch { /* keep defaults */ }
+  }
+
+  document.getElementById('btnSnapshot').addEventListener('click', () => loadSnapshot(true));
+  document.getElementById('btnRefine').addEventListener('click', refine);
+  document.getElementById('btnTest').addEventListener('click', test);
+  document.getElementById('btnSave').addEventListener('click', save);
+  document.getElementById('zoom').addEventListener('change', e => { state.zoom = +e.target.value; render(); });
+  decimalsInput.addEventListener('change', renderJson);
+
+  loadConfig().then(() => loadSnapshot(true));
+})();
+</script>
+</body>
+</html>

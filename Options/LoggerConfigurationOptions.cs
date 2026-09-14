@@ -14,5 +14,8 @@ public class LoggerConfigurationOptions
 
     public string Password { get; set; } = string.Empty;
     
+    /// <summary>Settings for <see cref="LoggerType.Camera"/> loggers (ignored for other logger types).</summary>
+    public CameraOptions Camera { get; set; } = new();
+    
     public Uri BuildRtspUri => new Uri($"rtsp://{User}:{Password}@{Url}");
 }
