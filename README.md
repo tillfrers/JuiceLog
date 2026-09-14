@@ -5,7 +5,7 @@ PostgreSQL-Datenbank. Die Visualisierung (Grafana) ist nicht Teil des Projekts.
 
 ## Gaszähler per Kamera
 
-Der Gaszähler hat ein mechanisches Rollenzählwerk. Eine Tapo-Kamera filmt das Zählwerk, alle 5 Minuten wird
+Der Gaszähler hat ein mechanisches Rollenzählwerk. Eine Webcam filmt das Zählwerk, alle 5 Minuten wird
 ein Einzelbild aus dem RTSP-Stream geholt und die Ziffern werden mit einem kleinen CNN gelesen:
 
 ```
@@ -84,23 +84,6 @@ Ziffer Rohwert und Konfidenz:
 
 ```
 Camera: raw [4.0 3.0 7.0 5.0 8.0 2.0 7.0] confidence [1.00 1.00 1.00 1.00 1.00 1.00 1.00] -> 4375827
-```
-
-### Bekannte Einschränkungen / Tipps zur Kamera
-
-* Die Kamera arbeitet nachts im **IR-Modus**. Rot und Weiß reflektieren IR fast gleich, die weißen Ziffern
-  auf den roten Nachkomma-Rollen sind dadurch kontrastarm. Der Kontrast-Stretch fängt das für die ersten
-  beiden Nachkommastellen ab; besser wäre sichtbares Licht (kleine LED) und IR-Modus aus.
-* Das **weiße Klebeband** rechts spiegelt die IR-LEDs direkt in die dritte Nachkomma-Rolle – die ist damit
-  nicht lesbar und deshalb nicht konfiguriert (`DecimalDigits: 2`, Auflösung 10 Liter). Klebeband
-  entfernen oder mattes schwarzes Band verwenden, dann kann der achte ROI ergänzt werden
-  (etwa `X: 1166, Y: 550, 64x100`) und `DecimalDigits` auf 3 gesetzt werden.
-* Wird die Kamera bewegt, müssen die ROIs neu kalibriert werden.
-
-## Deployment auf dem Raspberry Pi
-
-```bash
-dotnet publish -c Release -r linux-arm64 --self-contained -o publish
 ```
 
 Die Modelle werden mit ins Ausgabeverzeichnis kopiert. Auf dem Pi wird nur `ffmpeg` zusätzlich benötigt.
