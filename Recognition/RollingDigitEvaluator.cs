@@ -1,27 +1,13 @@
 ﻿namespace JuiceLog.Recognition;
 
-/// <summary>
-/// Turns the fractional per-drum readings (e.g. 4.0, 3.0, 7.9, 0.2) of a mechanical counter into whole digits.
-///
-/// On a rolling counter the next higher drum starts moving while the lower drum passes from 9 to 0, so a drum
-/// may be read as "7.6" although the meter still shows 7. The rules below (ported from the AI-on-the-edge
-/// firmware, <c>ClassFlowCNNGeneral::PointerEvalHybridNew</c>) resolve that by looking at the drum to the right.
-/// </summary>
 public static class RollingDigitEvaluator
 {
-    /// <summary>Readings this close to a whole digit (in tenths) are rounded when the predecessor is stable.</summary>
     private const int DigitBand = 3;
-
-    /// <summary>Predecessor readings in [0.7, 9.3] mean "no zero crossing anywhere near".</summary>
+    
     private const float TransitionAreaPredecessor = 0.7f;
-
-    /// <summary>The current drum only runs ahead of its predecessor once the predecessor passed ~9.7.</summary>
+    
     private const float TransitionAreaForward = 9.7f;
-
-    /// <summary>
-    /// Resolves the readings (most significant digit first) to digits 0-9.
-    /// Returns <c>null</c> when a reading is not a number.
-    /// </summary>
+    
     public static int[]? ResolveDigits(ReadOnlySpan<float> readings)
     {
         if (readings.Length == 0)

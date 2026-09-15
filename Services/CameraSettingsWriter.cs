@@ -5,14 +5,6 @@ using JuiceLog.Options;
 
 namespace JuiceLog.Services;
 
-/// <summary>
-/// Persists digit ROIs drawn on the calibration page into the appsettings file that defines the camera logger.
-/// Everything else in the file is left untouched.
-///
-/// The file next to the running program is always updated. When the program runs from a build output folder
-/// (bin/Debug/..., i.e. a parent directory contains the .csproj) the appsettings of the project source is updated
-/// as well, otherwise the next build would copy the old positions over the calibrated ones.
-/// </summary>
 public sealed class CameraSettingsWriter
 {
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
@@ -82,8 +74,7 @@ public sealed class CameraSettingsWriter
         File.WriteAllText(path, root.ToJsonString(WriteOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: hadBom));
         return true;
     }
-
-    /// <summary>The runtime folder and, when running from a build output, the project folder above it.</summary>
+    
     private static IEnumerable<string> TargetDirectories()
     {
         var runtime = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
@@ -99,8 +90,7 @@ public sealed class CameraSettingsWriter
             }
         }
     }
-
-    /// <summary>Environment specific file first (it overrides the base file), then appsettings.json.</summary>
+    
     private static IEnumerable<string> CandidateFiles(string directory)
     {
         var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")

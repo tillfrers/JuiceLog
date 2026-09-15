@@ -4,11 +4,6 @@ using JuiceLog.Entities;
 
 namespace JuiceLog.Services;
 
-/// <summary>
-/// Filters misreads: a meter never runs backwards and cannot exceed a configured consumption per hour.
-/// If several consecutive readings are rejected but agree with each other, the stored value is assumed to
-/// be the wrong one (e.g. an earlier misread) and the new reading is accepted again ("self healing").
-/// </summary>
 public sealed class MeterReadingValidator : IMeterReadingValidator
 {
     private const int ConsistentRejectionsToAccept = 3;

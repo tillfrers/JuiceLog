@@ -6,7 +6,6 @@ using Microsoft.Extensions.Options;
 
 namespace JuiceLog.Services;
 
-/// <summary>Grabs single frames from an RTSP stream with ffmpeg (must be installed, e.g. "apt install ffmpeg").</summary>
 public sealed class FfmpegSnapshotService : ISnapshotService
 {
     private readonly TimeSpan _timeout;

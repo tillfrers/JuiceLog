@@ -3,30 +3,17 @@ using System.Text;
 
 namespace JuiceLog.Recognition.TfLite;
 
-/// <summary>
-/// Minimal, dependency-free TensorFlow-Lite interpreter for the small CNNs used for digit recognition
-/// (e.g. the "dig-class100" / "dig-cont" models of the AI-on-the-edge project).
-///
-/// The flatbuffer is parsed by hand, quantized constants are dequantized to float on load and the
-/// whole graph is executed in float. This keeps the runtime completely managed and therefore
-/// runnable on any platform .NET supports (including Raspberry Pi) without native libraries.
-///
-/// Supported ops: QUANTIZE, DEQUANTIZE, MUL, ADD, CONV_2D, DEPTHWISE_CONV_2D, MAX_POOL_2D,
-/// AVERAGE_POOL_2D, RESHAPE, FULLY_CONNECTED, SOFTMAX, RELU, RELU6, LEAKY_RELU, LOGISTIC.
-/// </summary>
 public sealed class TfLiteModel
 {
     private readonly Tensor[] _tensors;
     private readonly Operation[] _operations;
     private readonly int _inputIndex;
     private readonly int _outputIndex;
-
-    /// <summary>Input dimensions as [height, width, channels].</summary>
+    
     public int InputHeight { get; }
     public int InputWidth { get; }
     public int InputChannels { get; }
-
-    /// <summary>Number of output values (e.g. 100 for dig-class100, 2 for dig-cont, 11 for dig-class11).</summary>
+    
     public int OutputLength { get; }
 
     public static TfLiteModel Load(string path) => new(File.ReadAllBytes(path));
@@ -89,10 +76,7 @@ public sealed class TfLiteModel
             _operations[i] = ReadOperation(reader, table, code);
         }
     }
-
-    /// <summary>
-    /// Runs the model. <paramref name="input"/> must contain height*width*channels floats in HWC order.
-    /// </summary>
+    
     public float[] Run(ReadOnlySpan<float> input)
     {
         if (input.Length != InputHeight * InputWidth * InputChannels)
@@ -645,8 +629,7 @@ public sealed class TfLiteModel
         Tanh = 4,
         SignBit = 5,
     }
-
-    /// <summary>Just enough of the FlatBuffers wire format to walk the TFLite schema.</summary>
+    
     private sealed class FlatBufferReader(byte[] data)
     {
         public int Root() => Indirect(0);
@@ -655,8 +638,7 @@ public sealed class TfLiteModel
         private int I32(int pos) => BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(pos));
         private int U16(int pos) => BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
         private int Indirect(int pos) => pos + U32(pos);
-
-        /// <summary>Offset of a field inside a table (0 if the field is absent).</summary>
+        
         private int FieldOffset(int table, int fieldId)
         {
             if (table == 0) return 0;
@@ -683,8 +665,7 @@ public sealed class TfLiteModel
             var offset = FieldOffset(table, fieldId);
             return offset == 0 ? defaultValue : BinaryPrimitives.ReadSingleLittleEndian(data.AsSpan(table + offset));
         }
-
-        /// <summary>Position of a sub-table / vector referenced by a table field (0 if absent).</summary>
+        
         public int TableField(int table, int fieldId)
         {
             var offset = FieldOffset(table, fieldId);

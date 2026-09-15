@@ -4,12 +4,6 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace JuiceLog.Recognition;
 
-/// <summary>
-/// Improves hand-drawn digit ROIs. Boxes drawn on the calibration page tend to be generous, which lets the top of
-/// the next drum digit into the crop and makes the network believe the drum is in transition (e.g. "5.8" instead
-/// of "5.0"). The refiner tries slightly shifted and shrunk variants of every box and keeps the one for which the
-/// network sees a resting digit (reading close to a whole number) with high confidence.
-/// </summary>
 public sealed class RoiRefiner(DigitRecognizer recognizer)
 {
     private static readonly float[] Scales = [1.0f, 0.85f, 0.7f];

@@ -6,20 +6,10 @@ using SixLabors.ImageSharp.Processing;
 
 namespace JuiceLog.Recognition;
 
-/// <summary>
-/// Classifies single digit drums of a mechanical counter with a TFLite CNN.
-/// Every ROI is cropped from the frame, resized to the model input (typically 20x32 px) and fed to the
-/// network as RGB values 0-255, exactly like the AI-on-the-edge firmware does.
-/// </summary>
 public sealed class DigitRecognizer(TfLiteModel model)
 {
-    /// <summary>Marker for "no digit recognizable".</summary>
     public const float NotANumber = -1f;
-
-    /// <summary>
-    /// Returns one reading per ROI. <see cref="DigitReading.Value"/> is in the range 0.0 ≤ value &lt; 10.0
-    /// (a value like 7.5 means "between 7 and 8", i.e. the drum is in transition) or <see cref="NotANumber"/>.
-    /// </summary>
+    
     public DigitReading[] Recognize(Image<Rgb24> frame, CameraOptions options)
     {
         var rois = options.DigitRois;
@@ -60,7 +50,6 @@ public sealed class DigitRecognizer(TfLiteModel model)
         return readings;
     }
 
-    /// <summary>Classifies a single ROI of the frame.</summary>
     public DigitReading ReadDigit(Image<Rgb24> frame, Rectangle roi, bool autoContrast)
     {
         using var crop = PrepareCrop(frame, roi, autoContrast);
@@ -72,11 +61,7 @@ public sealed class DigitRecognizer(TfLiteModel model)
         FillInput(crop, input);
         return Interpret(model.Run(input));
     }
-
-    /// <summary>
-    /// Cuts a ROI out of the frame and prepares it exactly the way the network sees it
-    /// (resized to the model input, optionally contrast stretched).
-    /// </summary>
+    
     public Image<Rgb24> PrepareCrop(Image<Rgb24> frame, Rectangle roi, bool autoContrast)
     {
         // copy only the ROI (frame.Clone(...).Crop would duplicate the whole 3 MP frame first)
@@ -137,10 +122,6 @@ public sealed class DigitRecognizer(TfLiteModel model)
         });
     }
 
-    /// <summary>
-    /// Linearly stretches the brightness of a crop so that the darkest 2 % become black and the brightest 2 %
-    /// white. Compensates the flat, grey look of the coloured decimal drums in infrared (night vision) images.
-    /// </summary>
     private static void StretchContrast(Image<Rgb24> crop)
     {
         var histogram = new int[256];
@@ -193,7 +174,6 @@ public sealed class DigitRecognizer(TfLiteModel model)
         return histogram.Length - 1;
     }
 
-    /// <summary>Maps the network output to a reading, depending on the model family.</summary>
     private static DigitReading Interpret(float[] output)
     {
         switch (output.Length)

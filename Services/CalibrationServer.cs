@@ -14,11 +14,6 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace JuiceLog.Services;
 
-/// <summary>
-/// Tiny web page (http://&lt;host&gt;:&lt;port&gt;/) that shows a live snapshot of the camera and lets the user draw
-/// a box around every digit drum. The boxes can be tested against the recognizer and are saved as
-/// <see cref="CameraOptions.DigitRois"/>. Runs on plain <see cref="HttpListener"/>, so it works headless on the Pi.
-/// </summary>
 public sealed class CalibrationServer(
     IOptionsMonitor<AppConfiguration> configuration,
     ISnapshotService snapshotService,
@@ -103,8 +98,7 @@ public sealed class CalibrationServer(
 
         return null;
     }
-
-    /// <summary>Opens the page in the default browser - only where a desktop session exists.</summary>
+    
     private void TryOpenBrowser(string url)
     {
         try
@@ -282,8 +276,7 @@ public sealed class CalibrationServer(
             _snapshotLock.Release();
         }
     }
-
-    /// <summary>The 20x32 crops as data URLs, so the page can show what the network actually sees.</summary>
+    
     private string[] RenderCrops(byte[] jpeg, IReadOnlyList<DigitRoi> rois, bool autoContrast)
     {
         using var frame = Image.Load<Rgb24>(jpeg);
