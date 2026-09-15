@@ -39,6 +39,17 @@ public static class RollingDigitEvaluator
 
         return digits;
     }
+    
+    public static double ToValue(ReadOnlySpan<int> digits, int decimalDigits)
+    {
+        var integer = 0L;
+        foreach (var digit in digits)
+        {
+            integer = integer * 10 + digit;
+        }
+
+        return integer / Math.Pow(10, decimalDigits);
+    }
 
     /// <param name="number">Raw reading of the current drum.</param>
     /// <param name="predecessor">Raw reading of the drum to the right.</param>

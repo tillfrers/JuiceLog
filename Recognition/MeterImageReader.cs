@@ -39,8 +39,7 @@ public sealed class MeterImageReader(DigitRecognizer recognizer) : IMeterImageRe
             return new MeterImageReading(null, null, digitReadings, "at least one digit is not a number");
         }
 
-        var integer = digits.Aggregate(0L, (acc, digit) => acc * 10 + digit);
-        var value = integer / Math.Pow(10, options.DecimalDigits);
+        var value = RollingDigitEvaluator.ToValue(digits, options.DecimalDigits);
 
         return new MeterImageReading(value, digits, digitReadings, null);
     }

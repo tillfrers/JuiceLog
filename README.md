@@ -30,7 +30,16 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
   Ziffer unter dem gespeicherten (Zittern der letzten Rolle bei stehendem Zähler), wird stattdessen der letzte
   Wert erneut gespeichert - der Zähler läuft nie rückwärts. Die letzte Rolle wird dafür gerundet statt
   abgeschnitten, damit das Rauschen symmetrisch bleibt. Wird ein Wert abgelehnt, holt der Job einen neuen
-  Snapshot und wertet ihn erneut aus; nach drei Ablehnungen in Folge wird in diesem Durchlauf nichts gespeichert.
+  Snapshot und wertet ihn erneut aus.
+* **Korrektur der vorderen Ziffern** (`LeadingDigitCorrector`): werden alle drei Versuche abgelehnt, liegt meist
+  eine einzelne falsch gelesene Rolle vor (die unscharfe 4 ganz links wird gern als 7 gelesen). Aus dem letzten
+  gespeicherten Wert, der seitdem vergangenen Zeit und `MaxIncreasePerHour` ergibt sich der Bereich, in dem der
+  Zähler jetzt stehen kann; alle vorderen Ziffern, die in diesem ganzen Bereich gleich sind, stehen damit fest
+  (bei 5 min Abstand meist alle Vorkommastellen, nach 2 h die ersten drei, nach einem Tag die ersten zwei). Liest
+  das Netz dort etwas anderes, wird die bekannte Ziffer eingesetzt und der so korrigierte Wert noch einmal geprüft;
+  die hinteren Ziffern bleiben immer die gelesenen. Die Korrektur steht im Log (`Camera: 7375831 corrected to
+  4375831 - digit #0 7->4: …`). Bleibt auch der korrigierte Wert unplausibel, wird in diesem Durchlauf nichts
+  gespeichert.
 
 ### Konfiguration (`appsettings.json`)
 
@@ -69,7 +78,8 @@ Netz liest dann z. B. "5.8" statt "5.0"). **Testen** zeigt die 20x32-Crops, Rohw
 den Zählerstand; **Speichern** schreibt die ROIs in die `appsettings*.json` **neben dem laufenden Programm**
 (beim Start aus der IDE also `bin/Debug/net10.0/`) und zusätzlich in die Projektdatei, wenn das Programm aus einem
 Build-Ordner unterhalb der `.csproj` läuft. Sie werden ohne Neustart beim nächsten Durchlauf verwendet.
-Die Seite bleibt auch danach erreichbar (Nachjustieren nach einem Kamerastoß). Sie hat keine Anmeldung –
+Die Seite bleibt auch danach erreichbar: beim Öffnen lädt sie die gespeicherten Kästchen (Zoom "Anpassen" zeigt
+das ganze Bild), die sich nachjustieren und erneut speichern lassen (etwa nach einem Kamerastoß). Sie hat keine Anmeldung –
 nur im Heimnetz betreiben. Unter Windows braucht `http://*:47311/` einmalig
 `netsh http add urlacl url=http://*:47311/ user=Everyone` (sonst nur `localhost`), unter Linux nicht.
 

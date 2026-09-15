@@ -44,9 +44,10 @@
   <button id="btnSnapshot">Neuer Snapshot</button>
   <label>Zoom
     <select id="zoom">
+      <option value="fit" selected>Anpassen</option>
       <option value="0.5">50 %</option>
       <option value="0.75">75 %</option>
-      <option value="1" selected>100 %</option>
+      <option value="1">100 %</option>
       <option value="1.5">150 %</option>
       <option value="2">200 %</option>
     </select>
@@ -60,7 +61,8 @@
 <main>
   <div id="stage"><canvas id="canvas"></canvas></div>
   <aside>
-    <p class="hint">Ziehe mit der Maus ein Kästchen um <b>jede Ziffernrolle</b>, von links nach rechts. Die Ziffer soll
+    <p class="hint">Bereits gespeicherte Kästchen werden beim Öffnen geladen und können nachjustiert und erneut gespeichert werden.
+      Ziehe mit der Maus ein Kästchen um <b>jede Ziffernrolle</b>, von links nach rechts. Die Ziffer soll
       mittig sitzen, mit etwas Rand (Seitenverhältnis ungefähr 2:3). Grob reicht: <b>Kästchen optimieren</b> justiert Position und Größe danach automatisch nach. Kästchen anklicken
       zum Auswählen, ziehen zum Verschieben, an der rechten unteren Ecke ziehen zur Größenänderung. <kbd>Pfeile</kbd> verschieben um 1 px
       (<kbd>Shift</kbd> 5 px), <kbd>Entf</kbd> löscht.</p>
@@ -87,7 +89,9 @@
     img: null,
     boxes: [],      // {x, y, w, h} in image pixels
     selected: -1,
-    zoom: 1,
+    zoom: 1,        // effective scale, derived from zoomMode on every render
+    zoomMode: 'fit', // 'fit' or a fixed factor
+    loadedBoxes: 0, // boxes taken from the appsettings on page load
     drag: null,     // {mode: 'draw'|'move'|'resize', startX, startY, box}
   };
 
@@ -101,8 +105,14 @@
     state.selected = selectedBox ? state.boxes.indexOf(selectedBox) : -1;
   }
 
+  function fitZoom() {
+    const z = Math.min((stage.clientWidth - 2) / state.img.naturalWidth, (stage.clientHeight - 2) / state.img.naturalHeight);
+    return Math.max(0.1, Math.floor(z * 100) / 100);
+  }
+
   function render() {
     if (!state.img) return;
+    state.zoom = state.zoomMode === 'fit' ? fitZoom() : +state.zoomMode;
     const z = state.zoom;
     canvas.width = Math.round(state.img.naturalWidth * z);
     canvas.height = Math.round(state.img.naturalHeight * z);
@@ -264,7 +274,9 @@
       const img = new Image();
       await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = URL.createObjectURL(blob); });
       state.img = img;
-      setStatus(`Snapshot ${img.naturalWidth}×${img.naturalHeight} px`, 'ok');
+      const loaded = state.loadedBoxes ? ` – ${state.loadedBoxes} gespeicherte Kästchen geladen` : '';
+      state.loadedBoxes = 0;
+      setStatus(`Snapshot ${img.naturalWidth}×${img.naturalHeight} px${loaded}`, 'ok');
       render();
     } catch (err) {
       setStatus('Snapshot fehlgeschlagen: ' + err.message, 'error');
@@ -348,6 +360,7 @@
       const cfg = await res.json();
       decimalsInput.value = cfg.decimalDigits;
       state.boxes = (cfg.digitRois || []).map(r => ({ x: r.x, y: r.y, w: r.width, h: r.height }));
+      state.loadedBoxes = state.boxes.length;
       sortBoxes();
     } catch { /* keep defaults */ }
   }
@@ -356,7 +369,8 @@
   document.getElementById('btnRefine').addEventListener('click', refine);
   document.getElementById('btnTest').addEventListener('click', test);
   document.getElementById('btnSave').addEventListener('click', save);
-  document.getElementById('zoom').addEventListener('change', e => { state.zoom = +e.target.value; render(); });
+  document.getElementById('zoom').addEventListener('change', e => { state.zoomMode = e.target.value; render(); });
+  window.addEventListener('resize', () => { if (state.zoomMode === 'fit') render(); });
   decimalsInput.addEventListener('change', renderJson);
 
   loadConfig().then(() => loadSnapshot(true));
