@@ -120,20 +120,25 @@ public class CollectorJob(
         }
 
         var last = await energyRepository.GetLastEnergyValueAsync(LoggerType.Camera, logger.EnergyType);
-        // the least significant drum may jitter by one unit while the meter stands still
-        var tolerance = 1.5 * Math.Pow(10, -logger.Camera.DecimalDigits);
+        // the least significant drum may jitter by a unit or two while the meter stands still
+        var tolerance = 2.5 * Math.Pow(10, -logger.Camera.DecimalDigits);
         var verdict = meterReadingValidator.Validate(logger.EnergyType, value, last, timeProvider.GetBerlinNow,
             logger.Camera.MaxIncreasePerHour, tolerance, out var reason);
 
-        if (verdict != ReadingVerdict.Accept)
+        if (verdict == ReadingVerdict.Reject)
         {
-            Console.WriteLine($"Camera: reading {value} {(verdict == ReadingVerdict.Reject ? "rejected" : "skipped")}: {reason} {timeProvider.GetBerlinNow}");
+            Console.WriteLine($"Camera: reading {value} rejected: {reason} {timeProvider.GetBerlinNow}");
             return;
         }
 
         if (!string.IsNullOrEmpty(reason))
         {
             Console.WriteLine($"Camera: {reason} {timeProvider.GetBerlinNow}");
+        }
+
+        if (verdict == ReadingVerdict.UseLastValue)
+        {
+            value = last!.Value; // a meter never runs backwards, the drum only jittered
         }
 
         await energyRepository.WriteEnergyValueToDbAsync(LoggerType.Camera, logger.EnergyType, value);

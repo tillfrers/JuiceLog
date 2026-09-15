@@ -25,8 +25,10 @@ public static class RollingDigitEvaluator
 
         var digits = new int[readings.Length];
 
-        // Least significant drum: nothing to the right of it, take it as is (a meter is read by truncation).
-        var previous = ((int)MathF.Floor(readings[^1] + 0.001f) + 10) % 10;
+        // Least significant drum: nothing to the right of it, so round to the nearest digit. Rounding (instead of
+        // the truncation a human would use) keeps the noise of a resting drum symmetric: a "7.7" is still a 8 and
+        // does not flip to 7 or 6 between readings. A 9.6 becomes 0 and carries into the next drum (see below).
+        var previous = ((int)MathF.Round(readings[^1], MidpointRounding.AwayFromZero) + 10) % 10;
         digits[^1] = previous;
 
         for (var i = readings.Length - 2; i >= 0; i--)

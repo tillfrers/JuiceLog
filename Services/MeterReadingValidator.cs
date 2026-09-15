@@ -40,9 +40,9 @@ public sealed class MeterReadingValidator : IMeterReadingValidator
             if (delta < 0 && -delta <= tolerance)
             {
                 // the least significant drum jittered below the stored value, the meter did not move
-                reason = $"value {value} is {-delta:0.###} below the stored value {last.Value}, within the tolerance -> unchanged";
+                reason = $"value {value} is {-delta:0.###} below the stored value {last.Value}, within the tolerance -> keeping {last.Value}";
                 _rejected.Remove(energyType);
-                return ReadingVerdict.Skip;
+                return ReadingVerdict.UseLastValue;
             }
 
             if (!_rejected.TryGetValue(energyType, out var rejected))

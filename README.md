@@ -26,8 +26,10 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
   (`PointerEvalHybridNew`) ist in `RollingDigitEvaluator` nachgebaut, ergänzt um eine Korrektur für
   Kaskaden (…8 | 9.9 | 0.3 → …9.000).
 * **Plausibilität** (`MeterReadingValidator`): ein Zähler läuft nie rückwärts und nicht schneller als
-  `MaxIncreasePerHour`. Unplausible Werte werden nicht gespeichert; liegt ein Wert nur um eine Einheit der letzten
-  Ziffer unter dem gespeicherten (Zittern der letzten Rolle bei stehendem Zähler), gilt er als unverändert. Sind drei aufeinanderfolgende
+  `MaxIncreasePerHour`. Unplausible Werte werden nicht gespeichert; liegt ein Wert bis zu 2,5 Einheiten der letzten
+  Ziffer unter dem gespeicherten (Zittern der letzten Rolle bei stehendem Zähler), wird stattdessen der letzte
+  Wert erneut gespeichert - der Zähler läuft nie rückwärts. Die letzte Rolle wird dafür gerundet statt
+  abgeschnitten, damit das Rauschen symmetrisch bleibt. Sind drei aufeinanderfolgende
   Ablesungen in sich konsistent, aber widersprechen dem gespeicherten Wert, gilt der gespeicherte Wert als
   Fehllesung und der neue wird übernommen (Selbstheilung).
 
@@ -69,7 +71,7 @@ den Zählerstand; **Speichern** schreibt die ROIs in die `appsettings*.json` **n
 (beim Start aus der IDE also `bin/Debug/net10.0/`) und zusätzlich in die Projektdatei, wenn das Programm aus einem
 Build-Ordner unterhalb der `.csproj` läuft. Sie werden ohne Neustart beim nächsten Durchlauf verwendet.
 Die Seite bleibt auch danach erreichbar (Nachjustieren nach einem Kamerastoß). Sie hat keine Anmeldung –
-nur im Heimnetz betreiben. Unter Windows braucht `http://*:8080/` einmalig
+nur im Heimnetz betreiben. Unter Windows braucht `http://*:47311/` einmalig
 `netsh http add urlacl url=http://*:47311/ user=Everyone` (sonst nur `localhost`), unter Linux nicht.
 
 Zusätzlich liegen nach jedem Lauf im `DebugDirectory`:

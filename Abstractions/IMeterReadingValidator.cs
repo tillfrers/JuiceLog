@@ -6,7 +6,9 @@ namespace JuiceLog.Abstractions;
 public enum ReadingVerdict
 {
     Accept,
-    Skip,
+    
+    UseLastValue,
+    
     Reject,
 }
 
