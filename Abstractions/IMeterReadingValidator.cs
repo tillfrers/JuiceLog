@@ -1,5 +1,4 @@
-﻿using JuiceLog.Common.Enums;
-using JuiceLog.Entities;
+﻿using JuiceLog.Entities;
 
 namespace JuiceLog.Abstractions;
 
@@ -14,6 +13,6 @@ public enum ReadingVerdict
 
 public interface IMeterReadingValidator
 {
-    ReadingVerdict Validate(EnergyType energyType, double value, Energy? last, DateTime now,
+    ReadingVerdict Validate(double value, Energy? last, DateTime now,
         double maxIncreasePerHour, double tolerance, out string reason);
 }

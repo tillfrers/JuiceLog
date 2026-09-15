@@ -29,9 +29,8 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
   `MaxIncreasePerHour`. Unplausible Werte werden nicht gespeichert; liegt ein Wert bis zu 2,5 Einheiten der letzten
   Ziffer unter dem gespeicherten (Zittern der letzten Rolle bei stehendem Zähler), wird stattdessen der letzte
   Wert erneut gespeichert - der Zähler läuft nie rückwärts. Die letzte Rolle wird dafür gerundet statt
-  abgeschnitten, damit das Rauschen symmetrisch bleibt. Sind drei aufeinanderfolgende
-  Ablesungen in sich konsistent, aber widersprechen dem gespeicherten Wert, gilt der gespeicherte Wert als
-  Fehllesung und der neue wird übernommen (Selbstheilung).
+  abgeschnitten, damit das Rauschen symmetrisch bleibt. Wird ein Wert abgelehnt, holt der Job einen neuen
+  Snapshot und wertet ihn erneut aus; nach drei Ablehnungen in Folge wird in diesem Durchlauf nichts gespeichert.
 
 ### Konfiguration (`appsettings.json`)
 
