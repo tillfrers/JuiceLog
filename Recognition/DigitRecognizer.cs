@@ -274,6 +274,4 @@ public sealed class DigitRecognizer(TfLiteModel model)
     }
 }
 
-/// <param name="Value">Fractional drum position 0.0 ≤ value &lt; 10.0, or <see cref="DigitRecognizer.NotANumber"/>.</param>
-/// <param name="Confidence">0..1, how sure the network is about the digit (and its neighbour during a transition).</param>
 public readonly record struct DigitReading(float Value, float Confidence);

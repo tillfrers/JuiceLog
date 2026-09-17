@@ -9,4 +9,6 @@ public class Energy
     public required LoggerType LoggerType { get; set; }
     public required double Value { get; set; }
     public required DateTimeOffset Date { get; set; }
+
+    public bool Estimated { get; set; }
 }

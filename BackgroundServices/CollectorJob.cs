@@ -22,8 +22,6 @@ public class CollectorJob(
 {
     public static readonly JobKey JobKey = new("Collector", "BackgroundJob");
 
-    // a rejected reading is retried with a fresh snapshot; only when every attempt is rejected the leading digits
-    // that cannot have changed since the last stored value are corrected (a blurry 4 read as a 7)
     private const int MaxReadAttempts = 3;
 
     public async Task Execute(IJobExecutionContext context)
@@ -114,101 +112,74 @@ public class CollectorJob(
             return;
         }
 
-        var last = await energyRepository.GetLastEnergyValueAsync(LoggerType.Camera, logger.EnergyType);
-        // the least significant drum may jitter by a unit or two while the meter stands still
+        var last = await energyRepository.GetLastReadingAsync(LoggerType.Camera, logger.EnergyType);
         var tolerance = 2.5 * Math.Pow(10, -logger.Camera.DecimalDigits);
-        var rejected = new List<MeterImageReading>();
+        var values = new List<double>();
 
         for (var attempt = 1; attempt <= MaxReadAttempts; attempt++)
+        {
+            var value = await ReadSnapshotAsync(logger, last, attempt, cancellationToken);
+            if (value is null)
+            {
+                continue;
+            }
+
+            var agreed = values.Any(v => Math.Abs(v - value.Value) <= tolerance);
+            values.Add(value.Value);
+            if (agreed)
+            {
+                break; // two snapshots agree, no need for a third
+            }
+        }
+
+        if (values.Count == 0)
+        {
+            if (last is null || !logger.Camera.RepeatLastValueWhenUnreadable)
+            {
+                Console.WriteLine($"Camera: no usable snapshot in {MaxReadAttempts} attempts, nothing stored {timeProvider.GetBerlinNow}");
+                return;
+            }
+
+            await energyRepository.WriteEnergyValueToDbAsync(LoggerType.Camera, logger.EnergyType, last.Value, estimated: true);
+            Console.WriteLine($"Camera: no usable snapshot in {MaxReadAttempts} attempts, last reading {last.Value} from {last.Date:HH:mm} stored again as estimate {timeProvider.GetBerlinNow}");
+            return;
+        }
+
+        // the lowest plausible value: too low is caught up by the next reading, too high is stuck forever
+        await energyRepository.WriteEnergyValueToDbAsync(LoggerType.Camera, logger.EnergyType, values.Min());
+
+        Console.WriteLine($"Energy data written to DB {timeProvider.GetBerlinNow}");
+    }
+
+    private async Task<double?> ReadSnapshotAsync(LoggerConfigurationOptions logger, Energy? last, int attempt,
+        CancellationToken cancellationToken)
+    {
+        double? value;
+        string reason;
+        try
         {
             var jpeg = await snapshotService.CaptureJpegAsync(logger.BuildRtspUri, cancellationToken);
 
             var reading = meterImageReader.Read(jpeg, logger.Camera);
             Console.WriteLine($"Camera: raw [{reading.RawReadingsText}] confidence [{reading.ConfidencesText}] -> {reading.DigitsText} {timeProvider.GetBerlinNow}");
 
-            if (reading.Value is not { } value)
-            {
-                Console.WriteLine($"Camera: snapshot skipped: {reading.Problem} {timeProvider.GetBerlinNow}");
-                return;
-            }
-
-            var verdict = meterReadingValidator.Validate(value, last, timeProvider.GetBerlinNow,
-                logger.Camera.MaxIncreasePerHour, tolerance, out var reason);
-
-            if (verdict == ReadingVerdict.Reject)
-            {
-                Console.WriteLine($"Camera: reading {value} rejected ({attempt}/{MaxReadAttempts}): {reason} {timeProvider.GetBerlinNow}");
-                rejected.Add(reading);
-                continue;
-            }
-
-            if (!string.IsNullOrEmpty(reason))
-            {
-                Console.WriteLine($"Camera: {reason} {timeProvider.GetBerlinNow}");
-            }
-
-            if (verdict == ReadingVerdict.UseLastValue)
-            {
-                value = last!.Value; // a meter never runs backwards, the drum only jittered
-            }
-
-            await energyRepository.WriteEnergyValueToDbAsync(LoggerType.Camera, logger.EnergyType, value);
-
-            Console.WriteLine($"Energy data written to DB {timeProvider.GetBerlinNow}");
-            return;
+            value = meterReadingValidator.Evaluate(reading, last, timeProvider.GetBerlinNow, logger.Camera, out reason);
         }
-
-        if (last is not null && await TryStoreCorrectedAsync(logger, rejected, last, tolerance))
+        catch (Exception e) when (e is not OperationCanceledException)
         {
-            return;
+            value = null;
+            reason = e.Message;
         }
 
-        Console.WriteLine($"Camera: {MaxReadAttempts} readings in a row rejected, nothing stored {timeProvider.GetBerlinNow}");
-    }
-
-    /// <summary>
-    /// Every attempt was rejected: if the readings only differ from the stored value in leading drums that cannot
-    /// have turned in the meantime, those drums were misread and the known digits are used instead.
-    /// </summary>
-    private async Task<bool> TryStoreCorrectedAsync(LoggerConfigurationOptions logger, List<MeterImageReading> rejected,
-        Energy last, double tolerance)
-    {
-        foreach (var reading in rejected)
+        if (value is null)
         {
-            var digits = meterReadingValidator.CorrectLeadingDigits(reading.Digits!, logger.Camera.DecimalDigits, last,
-                timeProvider.GetBerlinNow, logger.Camera.MaxIncreasePerHour, tolerance, out var correction);
-            if (digits is null)
-            {
-                continue;
-            }
-
-            var value = RollingDigitEvaluator.ToValue(digits, logger.Camera.DecimalDigits);
-            var verdict = meterReadingValidator.Validate(value, last, timeProvider.GetBerlinNow,
-                logger.Camera.MaxIncreasePerHour, tolerance, out var reason);
-
-            if (verdict == ReadingVerdict.Reject)
-            {
-                Console.WriteLine($"Camera: corrected reading {value} rejected as well: {reason} {timeProvider.GetBerlinNow}");
-                continue;
-            }
-
-            Console.WriteLine($"Camera: {reading.DigitsText} corrected to {string.Concat(digits)} - {correction} {timeProvider.GetBerlinNow}");
-            if (!string.IsNullOrEmpty(reason))
-            {
-                Console.WriteLine($"Camera: {reason} {timeProvider.GetBerlinNow}");
-            }
-
-            if (verdict == ReadingVerdict.UseLastValue)
-            {
-                value = last.Value;
-            }
-
-            await energyRepository.WriteEnergyValueToDbAsync(LoggerType.Camera, logger.EnergyType, value);
-
-            Console.WriteLine($"Energy data written to DB {timeProvider.GetBerlinNow}");
-            return true;
+            Console.WriteLine($"Camera: snapshot {attempt}/{MaxReadAttempts} unusable: {reason} {timeProvider.GetBerlinNow}");
+        }
+        else if (!string.IsNullOrEmpty(reason))
+        {
+            Console.WriteLine($"Camera: {reason} {timeProvider.GetBerlinNow}");
         }
 
-        return false;
+        return value;
     }
 }

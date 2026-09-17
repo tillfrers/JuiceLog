@@ -68,6 +68,12 @@
       (<kbd>Shift</kbd> 5 px), <kbd>Entf</kbd> löscht.</p>
     <h2>Kästchen (<span id="count">0</span>)</h2>
     <table id="boxes"><thead><tr><th>#</th><th>X</th><th>Y</th><th>B</th><th>H</th><th></th></tr></thead><tbody></tbody></table>
+    <h2>Zählerstand</h2>
+    <p class="hint">Zuletzt gespeichert: <b id="lastReading">–</b>. Liest die Kamera dauerhaft falsch (z.&nbsp;B. eine Rolle um eins
+      daneben), hier den <b>am Zähler abgelesenen</b> Wert eintragen. Er wird wie eine Messung gespeichert und ist ab
+      dann die Referenz für die Plausibilitätsprüfung.</p>
+    <p><input type="number" id="reading" step="0.001" min="0" style="width: 8em" placeholder="43759.735">
+      <button id="btnReading">Zählerstand setzen</button></p>
     <h2>Testergebnis</h2>
     <div id="results"><p class="hint">Noch nicht getestet.</p></div>
     <h2>Konfiguration (JSON)</h2>
@@ -353,6 +359,33 @@
     }
   }
 
+  async function loadReading() {
+    try {
+      const res = await fetch('/api/reading');
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById('lastReading').textContent = data.value == null
+        ? 'noch nichts'
+        : ${data.value} ();
+    } catch { /* leave the placeholder */ }
+  }
+
+  async function setReading() {
+    const value = parseFloat(document.getElementById('reading').value);
+    if (!(value >= 0)) { setStatus('Bitte den abgelesenen Zählerstand eingeben.', 'error'); return; }
+    if (!confirm(Zählerstand  als Referenz speichern?)) return;
+    setStatus('Speichere Zählerstand …');
+    try {
+      const res = await fetch('/api/reading', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      setStatus(Zählerstand  gespeichert., 'ok');
+      await loadReading();
+    } catch (err) {
+      setStatus('Zählerstand speichern fehlgeschlagen: ' + err.message, 'error');
+    }
+  }
+
   async function loadConfig() {
     try {
       const res = await fetch('/api/config');
@@ -369,11 +402,13 @@
   document.getElementById('btnRefine').addEventListener('click', refine);
   document.getElementById('btnTest').addEventListener('click', test);
   document.getElementById('btnSave').addEventListener('click', save);
+  document.getElementById('btnReading').addEventListener('click', setReading);
   document.getElementById('zoom').addEventListener('change', e => { state.zoomMode = e.target.value; render(); });
   window.addEventListener('resize', () => { if (state.zoomMode === 'fit') render(); });
   decimalsInput.addEventListener('change', renderJson);
 
   loadConfig().then(() => loadSnapshot(true));
+  loadReading();
 })();
 </script>
 </body>

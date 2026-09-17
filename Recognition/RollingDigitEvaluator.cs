@@ -3,11 +3,11 @@
 public static class RollingDigitEvaluator
 {
     private const int DigitBand = 3;
-    
+
     private const float TransitionAreaPredecessor = 0.7f;
-    
+
     private const float TransitionAreaForward = 9.7f;
-    
+
     public static int[]? ResolveDigits(ReadOnlySpan<float> readings)
     {
         if (readings.Length == 0)
@@ -31,16 +31,25 @@ public static class RollingDigitEvaluator
         var previous = ((int)MathF.Round(readings[^1], MidpointRounding.AwayFromZero) + 10) % 10;
         digits[^1] = previous;
 
+        // a drum only turns while the drum to its right passes zero: right of a resting drum nothing is in transition
+        var atRest = false;
+
         for (var i = readings.Length - 2; i >= 0; i--)
         {
-            previous = Evaluate(readings[i], readings[i + 1], previous);
+            atRest = atRest || IsAwayFromZero(readings[i + 1]);
+            previous = atRest ? EvaluateAtRest(readings[i]) : Evaluate(readings[i], readings[i + 1], previous);
             digits[i] = previous;
         }
 
         return digits;
     }
-    
+
     public static double ToValue(ReadOnlySpan<int> digits, int decimalDigits)
+    {
+        return ToScaled(digits) / Math.Pow(10, decimalDigits);
+    }
+
+    public static long ToScaled(ReadOnlySpan<int> digits)
     {
         var integer = 0L;
         foreach (var digit in digits)
@@ -48,12 +57,23 @@ public static class RollingDigitEvaluator
             integer = integer * 10 + digit;
         }
 
-        return integer / Math.Pow(10, decimalDigits);
+        return integer;
     }
 
-    /// <param name="number">Raw reading of the current drum.</param>
-    /// <param name="predecessor">Raw reading of the drum to the right.</param>
-    /// <param name="evaluatedPredecessor">Already resolved digit of the drum to the right.</param>
+    private static bool IsAwayFromZero(float reading) =>
+        reading >= TransitionAreaPredecessor && reading <= 10 - TransitionAreaPredecessor;
+
+    private static int EvaluateAtRest(float number)
+    {
+        var tenths = (int)MathF.Floor(number * 10) % 10;
+        if (tenths <= DigitBand || tenths >= 10 - DigitBand)
+        {
+            return ((int)MathF.Round(number) + 10) % 10;
+        }
+
+        return ((int)MathF.Floor(number) + 10) % 10;
+    }
+
     private static int Evaluate(float number, float predecessor, int evaluatedPredecessor)
     {
         var tenths = (int)MathF.Floor(number * 10) % 10;
@@ -65,19 +85,6 @@ public static class RollingDigitEvaluator
             // (e.g. ...8 | 9.9 | 0.3 -> ...9.000). The carry has to cascade into this drum as well,
             // otherwise the result would be a full unit too low.
             return (whole + 1) % 10;
-        }
-
-        if (predecessor >= TransitionAreaPredecessor && predecessor <= 10 - TransitionAreaPredecessor)
-        {
-            // The predecessor is far away from a zero crossing, so this drum must be at rest.
-            // Readings close to a whole digit are rounded (the ROI is never perfectly centred),
-            // everything else is truncated.
-            if (tenths <= DigitBand || tenths >= 10 - DigitBand)
-            {
-                return ((int)MathF.Round(number) + 10) % 10;
-            }
-
-            return whole;
         }
 
         if (evaluatedPredecessor <= 1)

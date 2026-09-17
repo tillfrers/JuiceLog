@@ -1,4 +1,4 @@
-# JuiceLog
+﻿# JuiceLog
 
 Sammelt alle 5 Minuten Zählerstände (Strom-Smartmeter per REST, Gaszähler per Kamera) und schreibt sie in eine
 PostgreSQL-Datenbank. Die Visualisierung (Grafana) ist nicht Teil des Projekts.
@@ -26,20 +26,37 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
   (`PointerEvalHybridNew`) ist in `RollingDigitEvaluator` nachgebaut, ergänzt um eine Korrektur für
   Kaskaden (…8 | 9.9 | 0.3 → …9.000).
 * **Plausibilität** (`MeterReadingValidator`): ein Zähler läuft nie rückwärts und nicht schneller als
-  `MaxIncreasePerHour`. Unplausible Werte werden nicht gespeichert; liegt ein Wert bis zu 2,5 Einheiten der letzten
-  Ziffer unter dem gespeicherten (Zittern der letzten Rolle bei stehendem Zähler), wird stattdessen der letzte
-  Wert erneut gespeichert - der Zähler läuft nie rückwärts. Die letzte Rolle wird dafür gerundet statt
-  abgeschnitten, damit das Rauschen symmetrisch bleibt. Wird ein Wert abgelehnt, holt der Job einen neuen
-  Snapshot und wertet ihn erneut aus.
-* **Korrektur der vorderen Ziffern** (`LeadingDigitCorrector`): werden alle drei Versuche abgelehnt, liegt meist
-  eine einzelne falsch gelesene Rolle vor (die unscharfe 4 ganz links wird gern als 7 gelesen). Aus dem letzten
-  gespeicherten Wert, der seitdem vergangenen Zeit und `MaxIncreasePerHour` ergibt sich der Bereich, in dem der
-  Zähler jetzt stehen kann; alle vorderen Ziffern, die in diesem ganzen Bereich gleich sind, stehen damit fest
-  (bei 5 min Abstand meist alle Vorkommastellen, nach 2 h die ersten drei, nach einem Tag die ersten zwei). Liest
-  das Netz dort etwas anderes, wird die bekannte Ziffer eingesetzt und der so korrigierte Wert noch einmal geprüft;
-  die hinteren Ziffern bleiben immer die gelesenen. Die Korrektur steht im Log (`Camera: 7375831 corrected to
-  4375831 - digit #0 7->4: …`). Bleibt auch der korrigierte Wert unplausibel, wird in diesem Durchlauf nichts
-  gespeichert.
+  `MaxIncreasePerHour`. Aus dem letzten gespeicherten Messwert, der seitdem vergangenen Zeit und `MaxIncreasePerHour`
+  ergibt sich der Bereich, in dem der Zähler jetzt stehen kann (bei 5 min Abstand und 4 m³/h: letzter Wert − 0,02 bis
+  letzter Wert + 0,33). Nur Werte in diesem Bereich werden gespeichert; liegt ein Wert bis zu 2 Einheiten der letzten
+  Ziffer unter dem gespeicherten (Zittern der letzten Rolle bei stehendem Zähler), wird stattdessen der letzte Wert
+  erneut gespeichert. Die letzte Rolle wird dafür gerundet statt abgeschnitten, damit das Rauschen symmetrisch bleibt.
+* **Korrektur einzelner Rollen**: liegt der gelesene Wert außerhalb des Bereichs, ist meist eine einzelne Rolle falsch
+  gelesen (die unscharfe 4 ganz links als 7, eine 9 im Schatten als 0, eine 5 als 6). Zwei Korrekturen sind erlaubt:
+  * *Vordere Rollen*, die im ganzen Bereich dieselbe Ziffer zeigen, können sich seit dem letzten Wert nicht gedreht
+    haben - dort wird die bekannte Ziffer eingesetzt, egal was das Netz gelesen hat (bei 5 min Abstand meist alle
+    Rollen bis zur Einerstelle, nach 2 h die ersten drei). Die Konfidenz dieser Rollen spielt keine Rolle mehr; weichen
+    dort **mehrere** Rollen ab, hat sich vermutlich die Kamera bewegt und der Snapshot wird verworfen.
+  * *Eine Nachbarziffer*: passt der Wert danach immer noch nicht, wird für jede übrige Rolle geprüft, ob die Ziffer
+    davor oder dahinter auf der Rolle (0↔9, 5↔6, …) einen plausiblen Wert ergibt. Von mehreren Möglichkeiten gewinnt
+    der **kleinste** Wert: ein zu kleiner Wert wird von der nächsten Messung eingeholt, ein zu großer bleibt für immer
+    stehen, weil danach jeder richtige Wert als "rückwärts" abgelehnt würde.
+
+  Jede Korrektur steht im Log (`Camera: 4375027 corrected to 4375927 (digit #4 0->9): the meter must show
+  43758.94..43760.62 now`). Für die übrigen Rollen gilt `MinConfidence`: ist das Netz sich dort unsicher, ist der
+  Snapshot unbrauchbar.
+* **Mehrere Snapshots pro Lauf**: pro Durchlauf werden bis zu drei Snapshots gelesen; sobald zwei davon übereinstimmen,
+  ist Schluss. Von mehreren plausiblen Werten wird der kleinste gespeichert (Begründung wie oben). Ein unbrauchbarer
+  Snapshot (Kamera nicht erreichbar, Ziffer unsicher, unplausibel) wird durch einen frischen ersetzt.
+* **Lückenlose Reihe**: war kein Snapshot des Laufs brauchbar, wird der letzte Messwert erneut gespeichert, in der
+  Spalte `Estimated` als Schätzung markiert (`RepeatLastValueWhenUnreadable`, Standard an). Der Zähler läuft nie
+  rückwärts, der letzte Messwert ist also eine sichere Untergrenze. Der Plausibilitätsbereich rechnet weiter ab dem
+  letzten **echten** Messwert, das Zeitfenster wächst also, solange nichts gelesen werden kann. Für einen Grafana-Alarm
+  "Kamera liest nicht" eignet sich deshalb `Estimated = true` über längere Zeit statt "keine Daten".
+* **Zählerstand von Hand setzen**: hat sich doch einmal ein falscher Wert festgesetzt, kann der am Zähler abgelesene
+  Stand auf der Kalibrierseite unter *Zählerstand* eingetragen werden. Er wird wie eine Messung gespeichert und ist ab
+  dann die Referenz. Falsche Werte in der Vergangenheit bleiben davon unberührt, die lassen sich nur direkt in der
+  Datenbank korrigieren (`UPDATE "Energy" SET "Value" = "Value" - 1 WHERE "LoggerType" = 1 AND "Date" BETWEEN … AND …`).
 
 ### Konfiguration (`appsettings.json`)
 
@@ -53,9 +70,10 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
   "Camera": {
     "ModelPath": "Models/dig-cont_0900_s3_q.tflite",
     "DecimalDigits": 2,          // wie viele der hinteren ROIs Nachkommastellen sind
-    "MinConfidence": 0.6,        // unsichere Ziffer -> Snapshot wird übersprungen
+    "MinConfidence": 0.6,        // unsichere Ziffer (außer bekannte vordere Rollen) -> Snapshot unbrauchbar
     "MaxIncreasePerHour": 3.5,   // m³/h, Obergrenze für die Plausibilitätsprüfung (26-kW-Brennwerttherme: ~2,4-2,8 bei Volllast)
     "AutoContrast": true,        // Kontrast pro Ziffer strecken (wichtig bei IR-Bildern)
+    "RepeatLastValueWhenUnreadable": true, // kein brauchbarer Snapshot -> letzten Messwert als Schätzung erneut speichern
     "DebugDirectory": "debug",   // relativ zum Programmordner; leer = aus
     "DigitRois": [ { "X": 483, "Y": 465, "Width": 64, "Height": 100 }, … ]
   }

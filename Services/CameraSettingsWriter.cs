@@ -15,8 +15,6 @@ public sealed class CameraSettingsWriter
         AllowTrailingCommas = true,
     };
 
-    /// <param name="loggerIndex">Index of the camera entry in the "LoggerConfiguration" array.</param>
-    /// <returns>The paths of the files that were updated.</returns>
     public IReadOnlyList<string> Save(int loggerIndex, IReadOnlyList<DigitRoi> rois, int decimalDigits)
     {
         var written = new List<string>();

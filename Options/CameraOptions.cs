@@ -14,6 +14,8 @@ public class CameraOptions
     
     public double MaxIncreasePerHour { get; set; } = 3.5;
     
+    public bool RepeatLastValueWhenUnreadable { get; set; } = true;
+    
     public string? DebugDirectory { get; set; }
 }
 

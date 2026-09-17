@@ -23,15 +23,6 @@ public sealed class MeterImageReader(DigitRecognizer recognizer) : IMeterImageRe
 
         var digitReadings = recognizer.Recognize(frame, options);
 
-        for (var i = 0; i < digitReadings.Length; i++)
-        {
-            if (digitReadings[i].Confidence < options.MinConfidence)
-            {
-                return new MeterImageReading(null, null, digitReadings,
-                    $"digit #{i} is uncertain (confidence {digitReadings[i].Confidence:0.00} < {options.MinConfidence:0.00})");
-            }
-        }
-
         var rawValues = digitReadings.Select(r => r.Value).ToArray();
         var digits = RollingDigitEvaluator.ResolveDigits(rawValues);
         if (digits is null)

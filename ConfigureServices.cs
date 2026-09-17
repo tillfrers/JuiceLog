@@ -25,7 +25,7 @@ public static class ConfigureServices
         services.Configure<AppConfiguration>(configuration);
         
         services.AddSingleton<ITimeProvider, SystemTimeProvider>();
-        services.AddSingleton<IEnergyRepository, EnergyRepository>();
+        services.AddScoped<IEnergyRepository, EnergyRepository>();
 
         services.AddCameraMeterReading(configuration);
 

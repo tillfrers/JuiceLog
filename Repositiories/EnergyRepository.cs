@@ -8,7 +8,7 @@ namespace JuiceLog.Repositiories;
 
 public class EnergyRepository(AppDbContext dbContext, ITimeProvider timeProvider) : IEnergyRepository
 {
-    public Task WriteEnergyValueToDbAsync(LoggerType loggerType, EnergyType energyType, double value)
+    public Task WriteEnergyValueToDbAsync(LoggerType loggerType, EnergyType energyType, double value, bool estimated = false)
     {
         var energy = new Energy
         {
@@ -16,7 +16,8 @@ public class EnergyRepository(AppDbContext dbContext, ITimeProvider timeProvider
             EnergyType = energyType,
             LoggerType = loggerType,
             Value = value,
-            Date = timeProvider.GetBerlinNow
+            Date = timeProvider.GetBerlinNow,
+            Estimated = estimated,
         };
 
         dbContext.Energy.Add(energy);
@@ -25,11 +26,11 @@ public class EnergyRepository(AppDbContext dbContext, ITimeProvider timeProvider
         return Task.CompletedTask;
     }
 
-    public Task<Energy?> GetLastEnergyValueAsync(LoggerType loggerType, EnergyType energyType)
+    public Task<Energy?> GetLastReadingAsync(LoggerType loggerType, EnergyType energyType)
     {
         return dbContext.Energy
             .AsNoTracking()
-            .Where(e => e.LoggerType == loggerType && e.EnergyType == energyType)
+            .Where(e => e.LoggerType == loggerType && e.EnergyType == energyType && !e.Estimated)
             .OrderByDescending(e => e.Date)
             .FirstOrDefaultAsync();
     }

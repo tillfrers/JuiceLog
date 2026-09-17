@@ -21,6 +21,7 @@ public sealed class CalibrationServer(
     DigitRecognizer digitRecognizer,
     RoiRefiner roiRefiner,
     CameraSettingsWriter settingsWriter,
+    IServiceScopeFactory scopeFactory,
     ILogger<CalibrationServer> logger) : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -252,6 +253,33 @@ public sealed class CalibrationServer(
                 return;
             }
 
+            case ("GET", "/api/reading"):
+            {
+                var (_, camera) = RequireCamera();
+                using var scope = scopeFactory.CreateScope();
+                var last = await scope.ServiceProvider.GetRequiredService<IEnergyRepository>()
+                    .GetLastReadingAsync(LoggerType.Camera, camera.EnergyType);
+                await WriteJsonAsync(response, new { value = last?.Value, date = last?.Date });
+                return;
+            }
+
+            case ("POST", "/api/reading"):
+            {
+                var body = await ReadJsonAsync<ReadingRequest>(request);
+                var (_, camera) = RequireCamera();
+                if (double.IsNaN(body.Value) || body.Value < 0)
+                {
+                    throw new InvalidOperationException("The meter value must be a positive number.");
+                }
+
+                using var scope = scopeFactory.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<IEnergyRepository>()
+                    .WriteEnergyValueToDbAsync(LoggerType.Camera, camera.EnergyType, body.Value);
+                logger.LogInformation("Meter value {Value} entered manually and stored as reference", body.Value);
+                await WriteJsonAsync(response, new { value = body.Value });
+                return;
+            }
+
             default:
                 await WriteJsonAsync(response, new { error = "not found" }, HttpStatusCode.NotFound);
                 return;
@@ -344,5 +372,10 @@ public sealed class CalibrationServer(
     {
         public List<DigitRoi> DigitRois { get; set; } = [];
         public int DecimalDigits { get; set; }
+    }
+
+    private sealed class ReadingRequest
+    {
+        public double Value { get; set; } = double.NaN;
     }
 }
