@@ -366,20 +366,20 @@
       const data = await res.json();
       document.getElementById('lastReading').textContent = data.value == null
         ? 'noch nichts'
-        : ${data.value} ();
+        : data.value + ' (' + new Date(data.date).toLocaleString('de-DE') + ')';
     } catch { /* leave the placeholder */ }
   }
 
   async function setReading() {
     const value = parseFloat(document.getElementById('reading').value);
     if (!(value >= 0)) { setStatus('Bitte den abgelesenen Zählerstand eingeben.', 'error'); return; }
-    if (!confirm(Zählerstand  als Referenz speichern?)) return;
+    if (!confirm('Zählerstand ' + value + ' als Referenz speichern?')) return;
     setStatus('Speichere Zählerstand …');
     try {
       const res = await fetch('/api/reading', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || res.statusText);
-      setStatus(Zählerstand  gespeichert., 'ok');
+      setStatus('Zählerstand ' + data.value + ' gespeichert.', 'ok');
       await loadReading();
     } catch (err) {
       setStatus('Zählerstand speichern fehlgeschlagen: ' + err.message, 'error');
