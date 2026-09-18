@@ -39,15 +39,24 @@ public sealed class FfmpegSnapshotService : ISnapshotService
 
         await using var buffer = new MemoryStream();
 
-        await FFMpegArguments
-            .FromUrlInput(rtspUri, input => input.WithCustomArgument("-rtsp_transport tcp"))
-            .OutputToPipe(new StreamPipeSink(buffer), output => output
-                .WithFrameOutputCount(1)
-                .WithVideoCodec("mjpeg")
-                .WithCustomArgument("-q:v 2")
-                .ForceFormat("image2pipe"))
-            .CancellableThrough(timeout.Token)
-            .ProcessAsynchronously();
+        try
+        {
+            await FFMpegArguments
+                .FromUrlInput(rtspUri, input => input.WithCustomArgument("-rtsp_transport tcp"))
+                .OutputToPipe(new StreamPipeSink(buffer), output => output
+                    .WithFrameOutputCount(1)
+                    .WithVideoCodec("mjpeg")
+                    .WithCustomArgument("-q:v 2")
+                    .ForceFormat("image2pipe"))
+                .CancellableThrough(timeout.Token)
+                .ProcessAsynchronously();
+        }
+        catch (Exception e) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // FFMpegCore reports our own timeout as an OperationCanceledException, which the collector treats as
+            // "shutting down". A stalled stream is just one failed attempt, so surface it as an ordinary error.
+            throw new TimeoutException($"ffmpeg delivered no frame from {rtspUri.Host} within {_timeout.TotalSeconds:0}s.", e);
+        }
 
         if (buffer.Length == 0)
         {
