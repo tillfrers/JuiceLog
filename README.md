@@ -5,14 +5,24 @@ PostgreSQL-Datenbank. Die Visualisierung (Grafana) ist nicht Teil des Projekts.
 
 ## Gaszähler per Kamera
 
-Der Gaszähler hat ein mechanisches Rollenzählwerk. Eine Webcam filmt das Zählwerk, alle 5 Minuten wird
-ein Einzelbild aus dem RTSP-Stream geholt und die Ziffern werden mit einem kleinen CNN gelesen:
+Der Gaszähler hat ein mechanisches Rollenzählwerk. Eine Kamera schaut auf das Zählwerk, alle 5 Minuten wird
+ein Einzelbild geholt und die Ziffern werden mit einem kleinen CNN gelesen:
 
 ```
-RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CNN--> Rollenposition pro Ziffer (z.B. 7.4)
+Kamera (HTTP-Foto | RTSP --ffmpeg-->) JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CNN--> Rollenposition pro Ziffer (z.B. 7.4)
     --> Übergangslogik (RollingDigitEvaluator) --> Zählerstand --> Plausibilitätsprüfung --> DB
 ```
 
+* **Bildquelle**: `Url` entscheidet, wie das Bild geholt wird.
+  * `http://…`/`https://…`: die URL liefert direkt ein JPEG - ein Request pro Ablesung, kein Stream, keine Session, die
+    die Kamera verlieren könnte. So läuft es mit **IP Webcam** auf einem alten Android-Handy (`/photo.jpg` = Foto,
+    `/photoaf.jpg` = Foto mit Autofokus, `/shot.jpg` = Frame aus dem Video, stärker komprimiert), einer ESP32-CAM
+    (`/capture`) oder jeder IP-Kamera mit Snapshot-URL. `User`/`Password` gehen als Basic-Auth mit. Bei `https` bringt
+    IP Webcam ein selbstsigniertes Zertifikat mit, dafür `AllowUntrustedCertificate: true`. Ein EXIF-Orientierungs-Tag
+    im Foto wird in die Pixel eingerechnet, damit Kalibrierseite (Browser) und Erkennung (ImageSharp) dasselbe Bild sehen.
+  * sonst `host[:port][/pfad]` eines RTSP-Streams, aus dem `ffmpeg` einen Frame holt (klassische IP-Kamera wie Tapo).
+    Der dauerhafte H.264-Stream vom Handy hat sich als wackelig erwiesen (RTSP-Server-Apps verlieren die Verbindung,
+    nach einigen Stunden liefert der Stream nichts mehr), deshalb der HTTP-Weg.
 * **Modelle**: die Ziffernmodelle des [AI-on-the-edge](https://github.com/jomjol/AI-on-the-edge-device)-Projekts
   (`Models/*.tflite`, jeweils ~300 KB). Standard ist `dig-cont_0900_s3_q.tflite`, das zusätzlich eine
   brauchbare Konfidenz liefert; `dig-class100-0182-s2_q.tflite` liegt als Alternative bei.
@@ -74,9 +84,10 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
 {
   "LoggerType": 1,
   "EnergyType": 1,
-  "Url": "192.168.178.136:554/stream1",
+  "Url": "https://192.168.178.21:8080/photo.jpg", // Foto-URL (IP Webcam); oder host:port/pfad eines RTSP-Streams für ffmpeg
   "User": "…",
   "Password": "…",
+  "AllowUntrustedCertificate": true, // selbstsigniertes Zertifikat der Kamera bei https akzeptieren
   "Camera": {
     "ModelPath": "Models/dig-cont_0900_s3_q.tflite",
     "DecimalDigits": 2,          // wie viele der hinteren ROIs Nachkommastellen sind
@@ -91,7 +102,8 @@ RTSP-Stream --ffmpeg--> JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CN
 }
 ```
 
-`Ffmpeg:BinaryFolder` bleibt leer, wenn `ffmpeg` im PATH bzw. im Programmordner liegt (Pi: `apt install ffmpeg`).
+`ffmpeg` wird nur für RTSP-Quellen gebraucht; `Ffmpeg:BinaryFolder` bleibt leer, wenn es im PATH bzw. im Programmordner
+liegt (Pi: `apt install ffmpeg`), `Ffmpeg:TimeoutSeconds` begrenzt die Wartezeit auf einen Frame (Standard 30 s).
 
 ### ROIs kalibrieren
 
@@ -126,4 +138,5 @@ Ziffer Rohwert und Konfidenz:
 Camera: raw [4.0 3.0 7.0 5.0 8.0 2.0 7.0] confidence [1.00 1.00 1.00 1.00 1.00 1.00 1.00] -> 4375827
 ```
 
-Die Modelle werden mit ins Ausgabeverzeichnis kopiert. Auf dem Pi wird nur `ffmpeg` zusätzlich benötigt.
+Die Modelle werden mit ins Ausgabeverzeichnis kopiert. Auf dem Pi wird zusätzlich nur `ffmpeg` benötigt, und das nur
+für RTSP-Quellen.

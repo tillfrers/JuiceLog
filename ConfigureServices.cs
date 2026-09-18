@@ -34,7 +34,10 @@ public static class ConfigureServices
 
     private static IServiceCollection AddCameraMeterReading(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton<ISnapshotService, FfmpegSnapshotService>();
+        // http(s) camera URLs are fetched directly, RTSP sources go through ffmpeg
+        services.AddSingleton<HttpSnapshotService>();
+        services.AddSingleton<FfmpegSnapshotService>();
+        services.AddSingleton<ISnapshotService, SnapshotService>();
         services.AddSingleton<IMeterReadingValidator, MeterReadingValidator>();
         services.AddSingleton<IMeterImageReader, MeterImageReader>();
         services.AddSingleton<DigitRecognizer>();

@@ -158,7 +158,7 @@ public class CollectorJob(
         string reason;
         try
         {
-            var jpeg = await snapshotService.CaptureJpegAsync(logger.BuildRtspUri, cancellationToken);
+            var jpeg = await snapshotService.CaptureJpegAsync(logger, cancellationToken);
 
             var reading = meterImageReader.Read(jpeg, logger.Camera);
             Console.WriteLine($"Camera: raw [{reading.RawReadingsText}] confidence [{reading.ConfidencesText}] -> {reading.DigitsText} {timeProvider.GetBerlinNow}");

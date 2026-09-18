@@ -2,6 +2,7 @@
 using FFMpegCore.Pipes;
 using JuiceLog.Abstractions;
 using JuiceLog.Common;
+using JuiceLog.Options;
 using Microsoft.Extensions.Options;
 
 namespace JuiceLog.Services;
@@ -32,8 +33,9 @@ public sealed class FfmpegSnapshotService : ISnapshotService
     private static bool FfmpegExistsIn(string folder) =>
         File.Exists(Path.Combine(folder, "ffmpeg.exe")) || File.Exists(Path.Combine(folder, "ffmpeg"));
 
-    public async Task<byte[]> CaptureJpegAsync(Uri rtspUri, CancellationToken cancellationToken)
+    public async Task<byte[]> CaptureJpegAsync(LoggerConfigurationOptions camera, CancellationToken cancellationToken)
     {
+        var rtspUri = camera.BuildRtspUri;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(_timeout);
 

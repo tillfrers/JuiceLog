@@ -1,6 +1,8 @@
-﻿namespace JuiceLog.Abstractions;
+﻿using JuiceLog.Options;
+
+namespace JuiceLog.Abstractions;
 
 public interface ISnapshotService
 {
-    Task<byte[]> CaptureJpegAsync(Uri rtspUri, CancellationToken cancellationToken);
+    Task<byte[]> CaptureJpegAsync(LoggerConfigurationOptions camera, CancellationToken cancellationToken);
 }

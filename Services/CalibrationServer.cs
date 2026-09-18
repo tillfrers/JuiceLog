@@ -294,7 +294,7 @@ public sealed class CalibrationServer(
             if (fresh || _lastSnapshot is null)
             {
                 var (_, camera) = RequireCamera();
-                _lastSnapshot = await snapshotService.CaptureJpegAsync(camera.BuildRtspUri, cancellationToken);
+                _lastSnapshot = await snapshotService.CaptureJpegAsync(camera, cancellationToken);
             }
 
             return _lastSnapshot;
