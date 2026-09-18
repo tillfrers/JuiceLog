@@ -12,7 +12,10 @@ public class CameraOptions
     
     public bool AutoContrast { get; set; } = true;
     
-    public double MaxIncreasePerHour { get; set; } = 3.5;
+    public double MaxIncreasePerHour { get; set; } = 3;
+
+    // m³ accepted between two stored readings no matter how much time passed since the last one (0 = no limit)
+    public double MaxIncreaseAfterGap { get; set; } = 0.5;
     
     public bool RepeatLastValueWhenUnreadable { get; set; } = true;
     

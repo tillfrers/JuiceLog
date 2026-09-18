@@ -18,13 +18,13 @@ public static class MeterReadingCorrector
 
     public static int KnownDigit(int index, int digitCount, long low) => (int)(low / Weight(digitCount - 1 - index) % 10);
 
-    public static int[]? CorrectAdjacentMisread(ReadOnlySpan<int> digits, int knownDigits, long low, long high, out int correctedIndex)
+    public static int[]? CorrectAdjacentMisread(ReadOnlySpan<int> digits, int knownDigits, int correctableDigits, long low, long high, out int correctedIndex)
     {
         int[]? best = null;
         var bestValue = long.MaxValue;
         correctedIndex = -1;
 
-        for (var i = knownDigits; i < digits.Length; i++)
+        for (var i = knownDigits; i < correctableDigits; i++)
         {
             foreach (var delta in new[] { -1, 1 })
             {
