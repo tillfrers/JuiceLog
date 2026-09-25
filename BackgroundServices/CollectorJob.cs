@@ -103,8 +103,6 @@ public class CollectorJob(
     private async Task ProcessCameraAsync(LoggerConfigurationOptions logger, CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(logger.Url)) throw new Exception("Camera url is null");
-        if (string.IsNullOrEmpty(logger.User)) throw new Exception("Camera user is null");
-        if (string.IsNullOrEmpty(logger.Password)) throw new Exception("Camera password is null");
 
         if (logger.Camera.DigitRois.Count == 0)
         {
