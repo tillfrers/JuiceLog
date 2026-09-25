@@ -9,7 +9,7 @@ Der Gaszähler hat ein mechanisches Rollenzählwerk. Eine Kamera schaut auf das 
 ein Einzelbild geholt und die Ziffern werden mit einem kleinen CNN gelesen:
 
 ```
-Kamera (HTTP-Foto | RTSP --ffmpeg-->) JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CNN--> Rollenposition pro Ziffer (z.B. 7.4)
+Kamera (HTTP-Foto | MJPEG-Stream | RTSP --ffmpeg-->) JPEG --ImageSharp--> Ziffern-ROIs (20x32 px) --TFLite-CNN--> Rollenposition pro Ziffer (z.B. 7.4)
     --> Übergangslogik (RollingDigitEvaluator) --> Zählerstand --> Plausibilitätsprüfung --> DB
 ```
 
@@ -17,9 +17,17 @@ Kamera (HTTP-Foto | RTSP --ffmpeg-->) JPEG --ImageSharp--> Ziffern-ROIs (20x32 p
   * `http://…`/`https://…`: die URL liefert direkt ein JPEG - ein Request pro Ablesung, kein Stream, keine Session, die
     die Kamera verlieren könnte. So läuft es mit **IP Webcam** auf einem alten Android-Handy (`/photo.jpg` = Foto,
     `/photoaf.jpg` = Foto mit Autofokus, `/shot.jpg` = Frame aus dem Video, stärker komprimiert), einer ESP32-CAM
-    (`/capture`) oder jeder IP-Kamera mit Snapshot-URL. `User`/`Password` gehen als Basic-Auth mit. Bei `https` bringt
-    IP Webcam ein selbstsigniertes Zertifikat mit, dafür `AllowUntrustedCertificate: true`. Ein EXIF-Orientierungs-Tag
-    im Foto wird in die Pixel eingerechnet, damit Kalibrierseite (Browser) und Erkennung (ImageSharp) dasselbe Bild sehen.
+    (`/capture`) oder jeder IP-Kamera mit Snapshot-URL.
+  * `http://…/stream` o. ä.: bietet die Kamera nur einen **MJPEG-Stream** (z. B. `http://192.168.178.196:8080/stream`,
+    IP Webcam `/video`, ESP32-CAM `:81/stream`), wird nur der erste vollständige Frame gelesen und die Verbindung
+    wieder getrennt - auch hier ein kurzer Request pro Ablesung. Das Bild wird anhand der JPEG-Struktur aus dem
+    Datenstrom geschnitten; `multipart/x-mixed-replace`, dieselben Teile als `application/octet-stream` (so sendet es
+    die aktuelle Kamera) und Teile ohne `Content-Length` funktionieren gleichermaßen.
+  * Für beide gilt: `User`/`Password` gehen als Basic-Auth mit, der Timeout von 30 s umfasst Verbindung und Bild, und
+    die Kamera wird immer direkt angesprochen - ein Proxy aus `HTTP_PROXY` oder den Systemeinstellungen (Firmenrechner)
+    wird ignoriert, er käme ohnehin nicht ins Heimnetz. Bei `https` bringt IP Webcam ein selbstsigniertes Zertifikat
+    mit, dafür `AllowUntrustedCertificate: true`. Ein EXIF-Orientierungs-Tag im Foto wird in die Pixel eingerechnet,
+    damit Kalibrierseite (Browser) und Erkennung (ImageSharp) dasselbe Bild sehen.
   * sonst `host[:port][/pfad]` eines RTSP-Streams, aus dem `ffmpeg` einen Frame holt (klassische IP-Kamera wie Tapo).
     Der dauerhafte H.264-Stream vom Handy hat sich als wackelig erwiesen (RTSP-Server-Apps verlieren die Verbindung,
     nach einigen Stunden liefert der Stream nichts mehr), deshalb der HTTP-Weg.
@@ -84,7 +92,7 @@ Kamera (HTTP-Foto | RTSP --ffmpeg-->) JPEG --ImageSharp--> Ziffern-ROIs (20x32 p
 {
   "LoggerType": 1,
   "EnergyType": 1,
-  "Url": "https://192.168.178.21:8080/photo.jpg", // Foto-URL (IP Webcam); oder host:port/pfad eines RTSP-Streams für ffmpeg
+  "Url": "http://192.168.178.196:8080/stream", // MJPEG-Stream oder Foto-URL (IP Webcam /photo.jpg); oder host:port/pfad eines RTSP-Streams für ffmpeg
   "User": "…",
   "Password": "…",
   "AllowUntrustedCertificate": true, // selbstsigniertes Zertifikat der Kamera bei https akzeptieren

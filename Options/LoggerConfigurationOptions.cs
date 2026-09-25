@@ -8,8 +8,8 @@ public class LoggerConfigurationOptions
     
     public EnergyType EnergyType { get; set; }
     
-    // camera: an http(s) URL that returns a JPEG (IP Webcam /photo.jpg, ESP32-CAM /capture) or host[:port][/path]
-    // of an RTSP stream that ffmpeg grabs a frame from
+    // camera: an http(s) URL that returns a JPEG (IP Webcam /photo.jpg, ESP32-CAM /capture) or an MJPEG stream
+    // (/stream, IP Webcam /video), or host[:port][/path] of an RTSP stream that ffmpeg grabs a frame from
     public string Url { get; set; } = string.Empty;
     
     public string User { get; set; } = string.Empty;

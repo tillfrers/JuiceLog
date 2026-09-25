@@ -11,13 +11,17 @@ using SixLabors.ImageSharp.Processing;
 
 namespace JuiceLog.Services;
 
-// Fetches one JPEG from a still-image URL: IP Webcam (/photo.jpg, /photoaf.jpg, /shot.jpg), an ESP32-CAM (/capture)
-// or any IP camera with a snapshot endpoint. One request per reading - no stream to keep alive and no session the
-// camera could lose, which is what made the RTSP path of the phone apps flaky.
+// Fetches one JPEG over http(s): from a still-image URL (IP Webcam /photo.jpg, ESP32-CAM /capture, the snapshot
+// endpoint of an IP camera) or from an MJPEG stream (/stream, IP Webcam /video), of which only the first complete frame
+// is read before the connection is dropped again. One short request per reading - no stream to keep alive and no
+// session the camera could lose, which is what made the RTSP path of the phone apps flaky.
 public sealed class HttpSnapshotService : ISnapshotService, IDisposable
 {
     // Generous for a phone that still has to focus and take the photo; a stalled request is retried by the collector.
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+
+    // far more than any camera frame; stops a stream that never contains a JPEG from being read forever
+    private const int MaxPictureBytes = 32 * 1024 * 1024;
 
     private readonly HttpClient _client = CreateClient(trustAnyCertificate: false);
     private readonly HttpClient _trustingClient = CreateClient(trustAnyCertificate: true);
@@ -34,11 +38,17 @@ public sealed class HttpSnapshotService : ISnapshotService, IDisposable
         }
 
         var client = camera.AllowUntrustedCertificate ? _trustingClient : _client;
-        byte[] picture;
+        byte[]? picture;
+        int bytesRead;
         string? contentType;
+
+        // HttpClient.Timeout ends with the headers when the body is streamed, so the timeout covers reading the frame too
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(RequestTimeout);
         try
         {
-            using var response = await client.SendAsync(request, cancellationToken);
+            // the body of a stream never ends - read it only up to the first picture instead of buffering it
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 throw new InvalidOperationException($"{uri.Host} rejected the login (401) - check User and Password.");
@@ -50,8 +60,9 @@ public sealed class HttpSnapshotService : ISnapshotService, IDisposable
                     $"{uri.Host} answered {(int)response.StatusCode} {response.ReasonPhrase} for {uri.AbsolutePath}.");
             }
 
-            picture = await response.Content.ReadAsByteArrayAsync(cancellationToken);
             contentType = response.Content.Headers.ContentType?.MediaType;
+            await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+            (picture, bytesRead) = await JpegStreamReader.ReadFirstAsync(body, MaxPictureBytes, timeout.Token);
         }
         catch (HttpRequestException e) when (e.InnerException is AuthenticationException)
         {
@@ -60,14 +71,14 @@ public sealed class HttpSnapshotService : ISnapshotService, IDisposable
         }
         catch (OperationCanceledException e) when (!cancellationToken.IsCancellationRequested)
         {
-            // HttpClient reports its own timeout as a cancellation, just like ffmpeg - keep shutdown and timeout apart
+            // the timeout surfaces as a cancellation, just like with ffmpeg - keep shutdown and timeout apart
             throw new TimeoutException($"{uri.Host} delivered no picture within {RequestTimeout.TotalSeconds:0}s.", e);
         }
 
-        if (picture.Length < 2 || picture[0] != 0xFF || picture[1] != 0xD8)
+        if (picture is null)
         {
             throw new InvalidOperationException(
-                $"{uri.Host} returned {contentType ?? "unknown content"} ({picture.Length} bytes) instead of a JPEG - is {uri.AbsolutePath} the picture endpoint?");
+                $"{uri.Host} returned {contentType ?? "unknown content"} ({bytesRead} bytes) without a complete JPEG - is {uri.AbsolutePath} the picture or stream endpoint?");
         }
 
         return ApplyExifOrientation(picture);
@@ -93,7 +104,9 @@ public sealed class HttpSnapshotService : ISnapshotService, IDisposable
 
     private static HttpClient CreateClient(bool trustAnyCertificate)
     {
-        var handler = new SocketsHttpHandler();
+        // The camera sits in the LAN: a proxy from HTTP_PROXY or the system settings could not reach it and would
+        // answer with its own error page.
+        var handler = new SocketsHttpHandler { UseProxy = false };
         if (trustAnyCertificate)
         {
             // The https of IP Webcam comes with a self-signed certificate; the camera sits in the LAN and its login
@@ -101,7 +114,7 @@ public sealed class HttpSnapshotService : ISnapshotService, IDisposable
             handler.SslOptions.RemoteCertificateValidationCallback = delegate { return true; };
         }
 
-        return new HttpClient(handler) { Timeout = RequestTimeout };
+        return new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
     }
 
     public void Dispose()
