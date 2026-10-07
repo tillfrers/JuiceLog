@@ -21,6 +21,7 @@ public class CollectorJob(
     IMeterReadingValidator meterReadingValidator) : IJob
 {
     public static readonly JobKey JobKey = new("Collector", "BackgroundJob");
+    private static readonly HttpClient HttpClient = new();
 
     private const int MaxReadAttempts = 3;
 
@@ -61,35 +62,21 @@ public class CollectorJob(
             return;
         }
         
-        using var httpClient = new HttpClient();
-        var requestData = new CuculusMeterExtension.GetMeterReading("meter_reading", "123");
-        
-        var options = new JsonSerializerOptions { WriteIndented = true };
-        var jsonPayload = JsonSerializer.Serialize(requestData, options);
-        
-        var content = new StringContent(
-            jsonPayload,
-            Encoding.UTF8,
-            "application/json"
-        );
-        
-        using var response = await httpClient.PostAsync(logger.Url, content);
+        using var response = await HttpClient.PostAsync(logger.Url, null);
         
         if (response.IsSuccessStatusCode)
         {
-            var meterReadingResponse = JsonSerializer.Deserialize<CuculusMeterExtension.MeterReadingResponse>(
+            var meterReadingResponse = JsonSerializer.Deserialize<TasmotaExtension>(
                 await response.Content.ReadAsStringAsync());
-
-            if (meterReadingResponse?.meter.FirstOrDefault()?.data == null) return;
             
-            var data = meterReadingResponse.meter.FirstOrDefault()!.data.FirstOrDefault(d => d.OBIS == "1-0:1.8.0.255");
+            var data = meterReadingResponse?.StatusSns.Gs303?.TotalIn;
 
             if (data == null) return;
 
             await energyRepository.WriteEnergyValueToDbAsync(
                 LoggerType.SmartMeter, 
                 EnergyType.Electricity, 
-                Convert.ToDouble(data.entry[0].val[..^3])
+                Convert.ToDouble(data)
                 );
             
             Console.WriteLine($"Energy data written to DB {timeProvider.GetBerlinNow}");
